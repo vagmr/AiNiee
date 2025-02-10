@@ -4,19 +4,19 @@ from Base.Base import Base
 from Module_Folders.Translator.TranslatorConfig import TranslatorConfig
 from Module_Folders.PromptBuilder.PromptBuilderEnum import PromptBuilderEnum
 
-class PromptBuilderThink(Base):
+class PromptBuilderLocal(Base):
 
     def __init__(self) -> None:
         super().__init__()
 
     # 获取默认系统提示词，优先从内存中读取，如果没有，则从文件中读取
     def get_system_default(config: TranslatorConfig) -> str:
-        if getattr(PromptBuilderThink, "think_system_zh", None) == None:
-            with open("./Resource/Prompt/think_system_zh.txt", "r", encoding = "utf-8") as reader:
-                PromptBuilderThink.think_system_zh = reader.read().strip()
-        if getattr(PromptBuilderThink, "think_system_en", None) == None:
-            with open("./Resource/Prompt/think_system_en.txt", "r", encoding = "utf-8") as reader:
-                PromptBuilderThink.think_system_en = reader.read().strip()
+        if getattr(PromptBuilderLocal, "local_system_zh", None) == None:
+            with open("./Resource/Prompt/local_system_zh.txt", "r", encoding = "utf-8") as reader:
+                PromptBuilderLocal.local_system_zh = reader.read().strip()
+        if getattr(PromptBuilderLocal, "local_system_en", None) == None:
+            with open("./Resource/Prompt/local_system_en.txt", "r", encoding = "utf-8") as reader:
+                PromptBuilderLocal.local_system_en = reader.read().strip()
 
 
         # 如果输入的是字典，则转换为命名空间
@@ -29,17 +29,17 @@ class PromptBuilderThink(Base):
 
         # 构造结果
         if config == None:
-            result = PromptBuilderThink.think_system_zh
-        elif config.prompt_preset == PromptBuilderEnum.THINK and config.cn_prompt_toggle == True:
-            result = PromptBuilderThink.think_system_zh
-        elif config.prompt_preset == PromptBuilderEnum.THINK and config.cn_prompt_toggle == False:
-            result = PromptBuilderThink.think_system_en
+            result = PromptBuilderLocal.local_system_zh
+        elif config.prompt_preset == PromptBuilderEnum.LOCAL and config.cn_prompt_toggle == True:
+            result = PromptBuilderLocal.local_system_zh
+        elif config.prompt_preset == PromptBuilderEnum.LOCAL and config.cn_prompt_toggle == False:
+            result = PromptBuilderLocal.local_system_en
 
         return result
 
     # 获取系统提示词
     def build_system(config: TranslatorConfig) -> str:
-        PromptBuilderThink.get_system_default(config)
+        PromptBuilderLocal.get_system_default(config)
 
         pair = {
             "日语": "Japanese",
@@ -55,11 +55,11 @@ class PromptBuilderThink(Base):
 
         # 构造结果
         if config == None:
-            result = PromptBuilderThink.think_system_zh
-        elif config.prompt_preset == PromptBuilderEnum.THINK and config.cn_prompt_toggle == True:
-            result = PromptBuilderThink.think_system_zh
-        elif config.prompt_preset == PromptBuilderEnum.THINK and config.cn_prompt_toggle == False:
-            result = PromptBuilderThink.think_system_en
+            result = PromptBuilderLocal.local_system_zh
+        elif config.prompt_preset == PromptBuilderEnum.LOCAL and config.cn_prompt_toggle == True:
+            result = PromptBuilderLocal.local_system_zh
+        elif config.prompt_preset == PromptBuilderEnum.LOCAL and config.cn_prompt_toggle == False:
+            result = PromptBuilderLocal.local_system_en
             source_language = pair[config.source_language]
             target_language = pair[config.target_language]
 
