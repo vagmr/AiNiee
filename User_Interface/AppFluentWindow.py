@@ -1,5 +1,5 @@
-from PyQt5.QtCore import QUrl
-from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtCore import QUrl,QSize,QEventLoop,QTimer
+from PyQt5.QtGui import QDesktopServices,QIcon
 from PyQt5.QtWidgets import QApplication
 
 from qfluentwidgets import Theme
@@ -12,6 +12,7 @@ from qfluentwidgets import FluentWindow
 from qfluentwidgets import NavigationPushButton
 from qfluentwidgets import NavigationItemPosition
 from qfluentwidgets import NavigationAvatarWidget
+from qfluentwidgets import SplashScreen
 
 from Base.Base import Base
 from Base.PluginManager import PluginManager
@@ -48,6 +49,7 @@ class AppFluentWindow(FluentWindow, Base): #主窗口
     def __init__(self, version: str, plugin_manager: PluginManager) -> None:
         super().__init__()
 
+
         # 默认配置
         self.default = {
             "theme": "dark",
@@ -72,6 +74,13 @@ class AppFluentWindow(FluentWindow, Base): #主窗口
         self.setWindowTitle(version)
         self.titleBar.iconLabel.hide()
 
+         # 添加启动
+        self.splash = SplashScreen(QIcon("./Resource/logo.png"), self)
+        self.splash.setIconSize(QSize(self.APP_WIDTH, self.APP_HEIGHT))
+        self.splash.show()
+        
+        QTimer.singleShot(2800, lambda: self.splash.finish())
+
         # 设置启动位置
         desktop = QApplication.desktop().availableGeometry()
         self.move(desktop.width()//2 - self.width()//2, desktop.height()//2 - self.height()//2)
@@ -86,9 +95,13 @@ class AppFluentWindow(FluentWindow, Base): #主窗口
         # 隐藏返回按钮
         self.navigationInterface.panel.setReturnButtonVisible(False)
 
-        # 添加页面
+       
+
+        
         self.add_pages(plugin_manager)
 
+
+    
     # 重写窗口关闭函数
     def closeEvent(self, event) -> None:
         message_box = MessageBox("警告", "确定是否退出程序 ... ？", self)
@@ -117,7 +130,7 @@ class AppFluentWindow(FluentWindow, Base): #主窗口
 
     # 打开主页
     def open_project_page(self) -> None:
-        url = QUrl("https://github.com/NEKOparapa/AiNiee")
+        url = QUrl("https://github.com/vagmr/AiNiee")
         QDesktopServices.openUrl(url)
 
     # 开始添加页面
@@ -153,7 +166,7 @@ class AppFluentWindow(FluentWindow, Base): #主窗口
         self.navigationInterface.addWidget(
             routeKey = "avatar_navigation_widget",
             widget = NavigationAvatarWidget(
-                "NEKOparapa",
+                "Vagmr",
                 "Resource/Avatar.png",
             ),
             onClick = self.open_project_page,
