@@ -270,9 +270,11 @@ class Translator(Base):
             system = ""
             if self.config.system_prompt_switch == True:
                 system = self.config.system_prompt_content
+            elif self.config.target_platform == "LocalLLM": # 需要放在前面，以免提示词预设的分支覆盖
+                system = PromptBuilderLocal.build_system(self.config)
             elif self.config.prompt_preset in (PromptBuilderEnum.COMMON, PromptBuilderEnum.COT):
                 system = PromptBuilder.build_system(self.config)
-            elif self.config.prompt_preset in (PromptBuilderEnum.THINK):
+            elif self.config.prompt_preset == PromptBuilderEnum.THINK:
                 system = PromptBuilderThink.build_system(self.config)
             elif self.config.prompt_preset in (PromptBuilderEnum.LOCAL):
                 system = PromptBuilderLocal.build_system(self.config)

@@ -154,3 +154,4 @@ class EditableComboBoxCard(CardWidget):
             if new_items:
                 self.set_items(new_items)
                 self.items_changed.emit(new_items)
+
