@@ -455,8 +455,15 @@ class TranslatorRequester(Base):
                 api_key = self.get_apikey(),
             )
             
-            # 排除列表
-            exclude_models = {"deepseek-reasoner", "deepseek-r1", "DeepSeek-R1","4bd107bff85941239e27b1509eccfe98","9dc913a037774fc0b248376905c85da5","7ba7726dad4c4ea4ab7f39c7741aea68"}
+            # 默认排除列表
+            default_exclude_models = {"deepseek-reasoner", "deepseek-r1", "DeepSeek-R1"}
+            # 天翼云(实际不存在意义)
+            tyy_exclude_models = {"4bd107bff85941239e27b1509eccfe98","9dc913a037774fc0b248376905c85da5","7ba7726dad4c4ea4ab7f39c7741aea68"}
+            # xunfei
+            xf_exclude_models = {"xdeepseekv3","xdeepseekr1"}
+            exclude_models = default_exclude_models | tyy_exclude_models | xf_exclude_models
+
+
             # 针对ds-r模型的特殊处理，因为该模型不支持模型预输入回复
             if self.config.model in exclude_models:
                 # 检查一下最后的消息是否用户消息，以免误删。(用户使用了推理模型却不切换为推理模型提示词的情况)
