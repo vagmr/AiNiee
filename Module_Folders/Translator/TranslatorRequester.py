@@ -458,10 +458,22 @@ class TranslatorRequester(Base):
             # 默认排除列表
             default_exclude_models = {"deepseek-reasoner", "deepseek-r1", "DeepSeek-R1"}
             # 天翼云(实际不存在意义)
-            tyy_exclude_models = {"4bd107bff85941239e27b1509eccfe98","9dc913a037774fc0b248376905c85da5","7ba7726dad4c4ea4ab7f39c7741aea68"}
-            # xunfei
-            xf_exclude_models = {"xdeepseekv3","xdeepseekr1"}
-            exclude_models = default_exclude_models | tyy_exclude_models | xf_exclude_models
+            tyy_exclude_models = {
+                "4bd107bff85941239e27b1509eccfe98",
+                "9dc913a037774fc0b248376905c85da5",
+                "7ba7726dad4c4ea4ab7f39c7741aea68",
+            }
+            # 讯飞
+            xf_exclude_models = {"xdeepseekv3", "xdeepseekr1"}
+            # 商汤
+            st_exlude_models = {"DeepSeek-V3", "DeepSeek-R1"}
+        
+            exclude_models = (
+                default_exclude_models
+                | tyy_exclude_models
+                | xf_exclude_models
+                | st_exlude_models
+            )
 
 
             # 针对ds-r模型的特殊处理，因为该模型不支持模型预输入回复

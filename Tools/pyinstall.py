@@ -5,7 +5,7 @@ cmd = [
     "./AiNiee.py",
     "--icon=./Resource/Avatar.png", # FILE.ico: apply the icon to a Windows executable.
     "--clean", # Clean PyInstaller cache and remove temporary files before building.
-    "--onefile", # Create a one-file bundled executable.
+    "--onedir", 
     "--noconfirm", # Replace output directory (default: SPECPATH/dist/SPECNAME) without asking for confirmation
 ]
 
