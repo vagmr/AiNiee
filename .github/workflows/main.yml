@@ -34,9 +34,8 @@ jobs:
           $tagName = "${{ github.ref_name }}" -replace '^v','' 
           Copy-Item -Path "Resource" -Destination "dist\Resource" -Recurse -Force
           Copy-Item -Path "StevExtraction" -Destination "dist\StevExtraction" -Recurse -Force
-          Copy-Item -Path "Plugin_Scripts" -Destination "dist\Plugin_Scripts" -Recurse -Force
-          Compress-Archive -Path "dist" -DestinationPath "AiNiee-$tagName.zip"
-          echo "TAG_NAME=$tagName" >> $env:GITHUB_ENV
+          Copy-Item -Path "PluginScripts" -Destination "dist\PluginScripts" -Recurse -Force
+          Compress-Archive -Path "dist" -DestinationPath "AiNiee-Beta.zip"
 
       - name: Create Release
         id: create_release

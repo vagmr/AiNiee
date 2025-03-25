@@ -35,9 +35,10 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
 from Base.PluginManager import PluginManager
-from Module_Folders.Translator.Translator import Translator
-from Module_Folders.Request_Tester.Request import Request_Tester
-from User_Interface.AppFluentWindow import AppFluentWindow
+from ModuleFolders.Translator.Translator import Translator
+from ModuleFolders.RequestTester.RequestTester import RequestTester
+from ModuleFolders.RequestTester.ProcessTester import ProcessTester
+from UserInterface.AppFluentWindow import AppFluentWindow
 
 def display_banner():
     print(" █████   ██  ███    ██  ██  ███████  ███████ ")
@@ -52,8 +53,9 @@ def display_banner():
 def load_config() -> dict:
     config = {}
 
-    if os.path.exists("./Resource/config.json"):
-        with open("./Resource/config.json", "r", encoding = "utf-8") as reader:
+    config_path = os.path.join(".", "Resource", "config.json")
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding = "utf-8") as reader:
             config = json.load(reader)
 
     return config
@@ -70,12 +72,12 @@ if __name__ == "__main__":
     # 设置工作目录
     script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     sys.path.append(script_dir)
-    display_banner()
-    print(f"[[green]INFO[/]] 当前工作目录为 {script_dir}")
+    print(f"[[green]INFO[/]] Current working directory is {script_dir}")
 
     # 创建全局插件管理器
     plugin_manager = PluginManager()
-    plugin_manager.load_plugins_from_directory("./Plugin_Scripts")
+    plugin_path = os.path.join(".", "PluginScripts")
+    plugin_manager.load_plugins_from_directory(plugin_path)
 
     # 载入配置文件
     config = load_config()
@@ -103,14 +105,17 @@ if __name__ == "__main__":
 
     # 创建全局窗口对象
     app_fluent_window = AppFluentWindow(
-        version = "AiNiee v5.2.5-vagmr",
+        version = "AiNiee6.2 dev",
         plugin_manager = plugin_manager,
     )
 
-    # 创建全局测试器对象
-    request_tester = Request_Tester()
+    # 创建全局接口测试器对象，并初始化订阅事件
+    request_tester = RequestTester()
 
-    # 创建翻译器对象
+    # 创建全局流程测试器对象，并初始化订阅事件
+    process_tester = ProcessTester()
+
+    # 创建翻译器对象，并初始化订阅事件
     translator = Translator(plugin_manager = plugin_manager)
 
     # 显示全局窗口
