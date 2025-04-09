@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from ModuleFolders.Cache.CacheItem import CacheItem
+from ModuleFolders.Cache.CacheProject import CacheProject
 from ModuleFolders.FileReader.BaseReader import (
     BaseSourceReader,
     InputConfig,
@@ -21,7 +22,7 @@ class TransReader(BaseSourceReader):
     def support_file(self):
         return "trans"
 
-    def read_source_file(self, file_path: Path) -> list[CacheItem]:
+    def read_source_file(self, file_path: Path, cache_project: CacheProject) -> list[CacheItem]:
         trans_content = json.loads(file_path.read_text(encoding="utf-8"))
 
         files_data = trans_content["project"]["files"]
@@ -36,8 +37,20 @@ class TransReader(BaseSourceReader):
             # 遍历每对文本 [原文，翻译]
             for idx, text_pair in enumerate(data_list):
 
+                # 获取原文内容
                 source_text = text_pair[0]
-                translated_text = text_pair[1]
+
+                # 获取译文内容，并且防止列表越界，有些trans文件没有译文位置
+                if len(text_pair) >= 2:
+                    translated_text = text_pair[1]
+                else:
+                    translated_text = ""
+
+                # 检查翻译状态，过滤已翻译内容
+                if translated_text:
+                    translation_status = CacheItem.STATUS.TRANSLATED
+                else:
+                    translation_status = CacheItem.STATUS.UNTRANSLATED
 
                 # 确定该特定条目的标签
                 tags = None
@@ -53,6 +66,7 @@ class TransReader(BaseSourceReader):
                         rowInfoText = parameters[0].get("rowInfoText", "")  # 可能为 具体人名 或类似 "\\v[263]" 的字符串
 
                 item = text_to_cache_item(source_text, translated_text)
+                item.set_translation_status(translation_status) # 更新翻译状态
                 item.tags = tags
                 item.file_category = file_category
                 item.data_index = idx
