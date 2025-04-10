@@ -617,8 +617,19 @@ class TranslatorRequester(Base):
                 api_key= api_key,
             )
 
+            default_exclude_models = {"deepseek-reasoner", "deepseek-r1", "DeepSeek-R1"}
+            # 讯飞
+            xf_exclude_models = {"xdeepseekv3", "xdeepseekr1"}
+            # 商汤
+            st_exlude_models = {"DeepSeek-V3", "DeepSeek-R1"}
+        
+            exclude_models = (
+                default_exclude_models
+                | xf_exclude_models
+                | st_exlude_models
+            )
             # 针对ds-r模型的特殊处理，因为该模型不支持模型预输入回复
-            if model_name in {"deepseek-reasoner", "deepseek-r1", "DeepSeek-R1"}:
+            if model_name in exclude_models:
                 # 检查一下最后的消息是否用户消息，以免误删。(用户使用了推理模型卻不切换为推理模型提示词的情况)
                 if isinstance(messages[-1], dict) and messages[-1].get('role') != 'user':
                     messages = messages[:-1]  # 移除最后一个元素

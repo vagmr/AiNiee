@@ -29,9 +29,8 @@ import sys
 import multiprocessing
 
 import rapidjson as json
-from rich import print
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication
 
 from Base.PluginManager import PluginManager
@@ -39,6 +38,16 @@ from ModuleFolders.Translator.Translator import Translator
 from ModuleFolders.RequestTester.RequestTester import RequestTester
 from ModuleFolders.RequestTester.ProcessTester import ProcessTester
 from UserInterface.AppFluentWindow import AppFluentWindow
+from UserInterface.SplashScreen import SplashScreen
+
+def display_banner():
+    print(" █████   ██  ███    ██  ██  ███████  ███████ ")
+    print("██   ██  ██  ████   ██  ██  ██       ██      ")
+    print("███████  ██  ██ ██  ██  ██  █████    █████   ")
+    print("██   ██  ██  ██  ██ ██  ██  ██       ██      ")
+    print("██   ██  ██  ██   ████  ██  ███████  ███████ ")
+    print("                                        ")
+    print("                                        ")
 
 # 载入配置文件
 def load_config() -> dict:
@@ -63,7 +72,8 @@ if __name__ == "__main__":
     # 设置工作目录
     script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     sys.path.append(script_dir)
-    print(f"[[green]INFO[/]] Current working directory is {script_dir}")
+    display_banner()
+    print(f"[INFO] Current working directory is {script_dir}")
 
     # 创建全局插件管理器
     plugin_manager = PluginManager()
@@ -88,11 +98,15 @@ if __name__ == "__main__":
 
     # 设置全局字体属性，解决狗牙问题
     font = QFont("Consolas")
-    if config.get("font_hinting", True) == True:
+    if config.get("font_hinting", True) is True:
         font.setHintingPreference(QFont.PreferFullHinting)
     else:
         font.setHintingPreference(QFont.PreferNoHinting)
     app.setFont(font)
+
+    # 创建并显示启动页面
+    splash = SplashScreen()
+    splash.show()
 
     # 创建全局窗口对象
     app_fluent_window = AppFluentWindow(
@@ -109,8 +123,13 @@ if __name__ == "__main__":
     # 创建翻译器对象，并初始化订阅事件
     translator = Translator(plugin_manager = plugin_manager)
 
-    # 显示全局窗口
-    app_fluent_window.show()
+    # 使用定时器延迟关闭启动页面并显示主窗口
+    def finish_splash():
+        splash.finish()
+        app_fluent_window.show()
+
+    # 让启动页面显示足够长的时间
+    QTimer.singleShot(1000, finish_splash)
 
     # 进入事件循环，等待用户操作
     sys.exit(app.exec_())
