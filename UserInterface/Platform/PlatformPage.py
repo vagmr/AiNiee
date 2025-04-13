@@ -36,13 +36,12 @@ class PlatformPage(QFrame, Base):
         "tpm_limit": 8000000,
         "model": "gpt-4o",
         "top_p": 0.9,
-        "temperature": 0.7,
+        "temperature": 1.0,
         "presence_penalty": 0.0,
         "frequency_penalty": 0.0,
         "auto_complete": True,
         # 自定义平台一般不需要太多默认模型
         "model_datas": [
-            "gpt-4o"
         ],
         "format_datas": [
             "OpenAI",
@@ -190,7 +189,7 @@ class PlatformPage(QFrame, Base):
         self.save_config(config)
 
         # 更新所有控件
-        self.update_all_platform_widgets()
+        self.update_custom_platform_widgets(self.flow_card)
 
     # 重命名平台
     def rename_platform(self, tag: str) -> None:
@@ -215,7 +214,7 @@ class PlatformPage(QFrame, Base):
             self.save_config(config)
 
             # 更新所有控件
-            self.update_all_platform_widgets()
+            self.update_custom_platform_widgets(self.flow_card)
 
             self.success_toast("", self.tra("接口重命名成功"))
 
@@ -254,11 +253,6 @@ class PlatformPage(QFrame, Base):
                                 FluentIcon.EDIT,
                                 self.tra("编辑接口"),
                                 partial(self.show_api_edit_page, k),
-                            ),
-                            (
-                                 FluentIcon.ALBUM,
-                                self.tra("重命名接口"),
-                                partial(self.rename_platform, k),
                             ),
                             (
                                 FluentIcon.SCROLL,
@@ -364,41 +358,6 @@ class PlatformPage(QFrame, Base):
             self.generate_ui_datas(platforms, True)
         )
 
-    # 更新所有平台控件
-    def update_all_platform_widgets(self):
-        # 重新加载配置
-        config = self.load_config()
-
-        # 更新本地接口
-        local_platforms = {k:v for k, v in config.get("platforms").items() if v.get("group") == "local"}
-        for widget in self.findChildren(FlowCard):
-            if widget.title_label.text() == self.tra("本地接口"):
-                widget.take_all_widgets()
-                # 添加按钮
-                help_button = PushButton(self.tra("教程"))
-                help_button.setIcon(FluentIcon.HELP)
-                help_button.setContentsMargins(4, 0, 4, 0)
-                help_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/SakuraLLM/SakuraLLM/wiki")))
-                widget.add_widget_to_head(help_button)
-                # 更新子控件
-                self.init_drop_down_push_button(
-                    widget,
-                    self.generate_ui_datas(local_platforms, False),
-                )
-
-        # 更新在线接口
-        online_platforms = {k:v for k, v in config.get("platforms").items() if v.get("group") == "online"}
-        for widget in self.findChildren(FlowCard):
-            if widget.title_label.text() == self.tra("官方接口"):
-                widget.take_all_widgets()
-                self.init_drop_down_push_button(
-                    widget,
-                    self.generate_ui_datas(online_platforms, False),
-                )
-
-        # 更新自定义接口
-        self.update_custom_platform_widgets(self.flow_card)
-
     # 添加头部-本地接口
     def add_head_widget(self, parent, config):
         def init(widget):
@@ -454,8 +413,8 @@ class PlatformPage(QFrame, Base):
             config["platforms"][tag] = platform
             self.save_config(config)
 
-            # 更新所有控件
-            self.update_all_platform_widgets()
+            # 更新ui
+            self.update_custom_platform_widgets(self.flow_card)
 
         def on_add_button_clicked(widget):
             message_box = LineEditMessageBox(
@@ -474,7 +433,7 @@ class PlatformPage(QFrame, Base):
             add_button.clicked.connect(lambda: on_add_button_clicked(self))
             widget.add_widget_to_head(add_button)
 
-            # 更新控件
+            # 更新ui
             self.update_custom_platform_widgets(widget)
 
         self.flow_card = FlowCard(
