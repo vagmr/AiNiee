@@ -92,10 +92,6 @@
       "description": "匹配被$包裹的随机内容 $...$"
     },
     {
-      "regex": "\\$(.*?)\\$",
-      "description": "匹配被$包裹的随机内容 $...$"
-    },
-    {
       "regex": "\\\\[A-Za-z]\\[\\d+\\]>",
       "description": "带标签的任意字母控制代码 \\X[数字]>"
     },
@@ -110,6 +106,14 @@
     {
       "regex": "\\\\name",
       "description": "控制代码\\name"
+    },
+    {
+      "regex": "\\\\gold",
+      "description": "控制代码\\gold"
+    },
+    {
+      "regex": "\\\\count",
+      "description": "控制代码\\count"
     },
     {
         "regex": "\\\\AA\\[F\\]",

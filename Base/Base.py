@@ -10,6 +10,7 @@ from qfluentwidgets import InfoBarPosition
 
 from Base.EventManager import EventManager
 
+# 事件列表
 class Event():
 
     API_TEST_DONE = 100                             # API 测试完成
@@ -27,14 +28,22 @@ class Event():
     NEW_PROCESS_START = 500     # 新流程开始
     NEW_PROCESS_DONE = 501      # 新流程完成
 
+    APP_UPDATE_CHECK: int = 600                             # 检查更新
+    APP_UPDATE_CHECK_DONE: int = 610                        # 检查更新完成
+    APP_UPDATE_DOWNLOAD: int = 620                          # 下载应用
+    APP_UPDATE_DOWNLOAD_UPDATE: int = 630                   # 下载应用更新
+
+    GLOSS_TRANSLATION_START = 700                           # 术语表翻译 开始
+    GLOSS_TRANSLATION_DONE = 701                            # 术语表翻译 完成
+
+# 软件运行状态列表
 class Status():
 
     IDLE = 1000                                     # 无任务
-    API_TEST = 2000                                 # 测试中
     TRANSLATING = 3000                              # 翻译中
     STOPING = 4000                                  # 停止中
-    NEW_PROCESS_TEST = 3500     # 新流程测试中
-
+    API_TEST = 2000                                 # 接口测试中
+    GLOSS_TRANSLATION = 5000                        # 术语表翻译中
 
 
 class Base():
@@ -120,10 +129,10 @@ class Base():
 
     # DEBUG
     def debug(self, msg: str, e: Exception = None) -> None:
-        if self.is_debug() == False:
+        if self.is_debug() is False:
             return None
 
-        if e == None:
+        if e is None:
             print(f"[[yellow]DEBUG[/]] {msg}")
         else:
             print(f"[[yellow]DEBUG[/]] {msg}\n{e}\n{("".join(traceback.format_exception(None, e, e.__traceback__))).strip()}")
@@ -134,7 +143,7 @@ class Base():
 
     # ERROR
     def error(self, msg: str, e: Exception = None) -> None:
-        if e == None:
+        if e is None:
             print(f"[[red]ERROR[/]] {msg}")
         else:
             print(f"[[red]ERROR[/]] {msg}\n{e}\n{("".join(traceback.format_exception(None, e, e.__traceback__))).strip()}")

@@ -2,12 +2,12 @@ import os
 import time
 import threading
 
-import opencc
 import rapidjson as json
 
 from Base.Base import Base
 from ModuleFolders.Cache.CacheItem import CacheItem
 from ModuleFolders.Cache.CacheProject import CacheProject
+
 
 class CacheManager(Base):
 
@@ -226,38 +226,6 @@ class CacheManager(Base):
             chunk_length += current_length
 
         # 处理循环结束后剩余的最后一个chunk
-        if len(chunk) > 0:
-            chunks.append(chunk)
-            previous_chunks.append(self.generate_previous_chunks(chunk[0], previous_line_count))
-
-        return chunks, previous_chunks
-
-    # 生成缓存数据条目片段
-    def generate_item_chunks_old(self, limit_type: str, limit_count: int, previous_line_count: int) -> tuple[list[list[CacheItem]], list[list[CacheItem]]]:
-        chunks = []
-        previous_chunks = []
-
-        # 开始生成缓存数据片段
-        chunk = []
-        chunk_length = 0
-        for item in [v for v in self.items if v.get_translation_status() == CacheItem.STATUS.UNTRANSLATED]:
-            current_length = 1 if limit_type == "line" else item.get_token_count()
-            if (
-                # 首先，每个片段的第一条不判断是否超限，以避免特别长的文本导致死循环
-                len(chunk) > 0
-                # 然后，如果 累计长度超限 或者 数据来源跨文件，则结束此片段
-                and (chunk_length + current_length > limit_count or item.get_storage_path() != chunk[-1].get_storage_path())
-            ):
-                chunks.append(chunk)
-                previous_chunks.append(self.generate_previous_chunks(chunk[0], previous_line_count))
-
-                chunk = []
-                chunk_length = 0
-
-            chunk.append(item)
-            chunk_length = chunk_length + current_length
-
-        # 如果还有剩余数据，则添加到列表中
         if len(chunk) > 0:
             chunks.append(chunk)
             previous_chunks.append(self.generate_previous_chunks(chunk[0], previous_line_count))

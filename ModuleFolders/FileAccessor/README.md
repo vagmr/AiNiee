@@ -17,6 +17,7 @@
     - [Writer生命周期](#writer生命周期)
     - [Writer示例代码](#writer示例代码)
   - [Accessor介绍（可选）](#accessor介绍可选)
+  - [FileConverter介绍（可选）](#fileconverter介绍可选)
   - [贡献指南](#贡献指南)
 
 ## 读写器编写步骤
@@ -29,6 +30,7 @@
    在项目的 `ModuleFolders/FileReader` 和 `ModuleFolders/FileOutputer` 目录下创建新的 `.py` 文件， 例如 `XXXReader.py, XXXWriter.py` 。
 3. **编写读写器代码** 按照以下模板编写您的读写器代码，并确保继承自对应的基类。
 4. **复杂文件访问（可选）** 部分文件的读写逻辑比较复杂，可以把文件本身的读写逻辑抽取出来，参考 `DocxAccessor` 。
+5. **复杂文件转换（可选）** 部分文件可能无法直接翻译，可以把转换成中间格式做翻译，再转换回来，参考 `OfficeFileConverter` 。
 
 ## Reader介绍
 
@@ -65,15 +67,41 @@ class BaseSourceReader(ABC):
         pass
 
     @abstractmethod
-    def read_source_file(self, file_path: Path, cache_project: CacheProject) -> list[CacheItem]:
+    def read_source_file(self, file_path: Path, detected_encoding: str) -> list[CacheItem]:
         """读取文件内容，并返回原文(译文)片段"""
         pass
 
-    def can_read(self, file_path: Path) -> bool:
+    def can_read(self, file_path: Path, fast=True) -> bool:
         """验证文件兼容性，返回False则不会读取该文件"""
-        if file_path.suffix.replace('.', '', 1) != self.support_file:
+        if fast:
+            return self.can_read_by_extension(file_path)
+        try:
+            return self.can_read_by_content(file_path)
+        except Exception:
             return False
+
+    @classmethod
+    def is_environ_supported(cls) -> bool:
+        """用于判断当前环境是否支持该reader"""
         return True
+
+    def can_read_by_extension(self, file_path: Path):
+        """根据文件后缀判断是否可读"""
+        return file_path.suffix.replace('.', '', 1) == self.support_file
+
+    def can_read_by_content(self, file_path: Path) -> bool:
+        """根据文件内容判断是否可读"""
+        # 默认实现用后缀判断
+        return self.can_read_by_extension(file_path)
+
+    def get_file_project_type(self, file_path: Path) -> str:
+        """根据文件判断项目类型，无法判断时返回None"""
+        return self.get_project_type()
+
+    @property
+    def exclude_rules(self) -> list[str]:
+        """用于排除缓存文件/目录"""
+        return []
 ```
 
 ### Reader生命周期
@@ -105,10 +133,7 @@ class BaseSourceReader(ABC):
 3. 在 `read_source_file` 读取源文件，把源文档会被分拆成多个片段，并返回原文片段列表 `list[CacheItem]`
 4. `CacheItem` 中只定义了通用的属性，若实在有需要可直接给 `CacheItem` 赋值，如 `item.sentence_indent = spaces`
 5. 为保持可读性和可维护性，一些复杂的计算逻辑可提取成函数如 `_count_next_empty_line`
-6. 使用了 `BaseReader` 中的 `read_file_safely` 函数，可以试图正确读取多种编码的文件，并将文件的原始编码与行尾序列保存至 `CacheProject` 类中，供后续的 `Writer` 使用
-7. **特别注意**：
-
-    `read_file_safely` 函数仅支持纯文本读取，请在仅当文本为纯文本时才使用
+6. 使用了从 `DirectoryReader` 传入的 `detected_encoding` 参数，适用于大部分情况下的**纯文本**可靠解码
 
 ```python
 class TxtReader(BaseSourceReader):
@@ -124,19 +149,27 @@ class TxtReader(BaseSourceReader):
     def support_file(self):
         return "txt"
 
-    def read_source_file(self, file_path: Path, cache_project: CacheProject) -> list[CacheItem]:
+    def read_source_file(self, file_path: Path, detected_encoding: str) -> list[CacheItem]:
         items = []
         # 切行
-        # 使用 `BaseReader` 中的 `read_file_safely` 函数正确读取多种编码的文件，并将原始编码与行尾序列保存至 `CacheProject` 类中
-        # 可供后续的 `Writer` 使用
-        lines = read_file_safely(file_path, cache_project).split(cache_project.get_line_ending())
-        for j, line in enumerate(lines):
-            if line.strip() == '':  # 跳过空行
+        # 使用传入的 `detected_encoding` 参数正确读取未知编码的纯文本文件，并使用`splitlines()`正确切分行
+        lines = file_path.read_text(encoding=detected_encoding).splitlines()
+
+        for i, line in enumerate(lines):
+            # 如果当前行是空行
+            # 并且位置不是文本开头，则跳过当前行
+            if not line.strip() and i != 0:
                 continue
-            spaces = len(line) - len(line.lstrip())  # 获取行开头的空格数
-            item = text_to_cache_item(line)
+
+            # 去掉文本开头的空格
+            line_lstrip = line.lstrip()
+            # 获取文本行开头的原始空格
+            spaces = line[:len(line) - len(line_lstrip)]
+
+            item = text_to_cache_item(line_lstrip)
+            # 原始空格保存至变量中，后续Writer中还原
             item.sentence_indent = spaces
-            item.line_break = self._count_next_empty_line(lines, j)
+            item.line_break = self._count_next_empty_line(lines, i)
             items.append(item)
         return items
 
@@ -173,6 +206,22 @@ class BaseTranslationWriter(ABC):
         self.translated_encoding = output_config.translated_config.file_encoding or "utf-8"
         self.translated_line_ending = output_config.translated_config.line_ending or os.linesep
 
+    class TranslationMode(Enum):
+        TRANSLATED = ('translated_config', 'write_translated_file')
+        BILINGUAL = ('bilingual_config', 'write_bilingual_file')
+
+        def __init__(self, config_attr, write_method) -> None:
+            self.config_attr = config_attr
+            self.write_method = write_method
+
+    def can_write(self, mode: TranslationMode) -> bool:
+        """判断writer是否支持该输出方式"""
+        if mode == self.TranslationMode.TRANSLATED:
+            return isinstance(self, BaseTranslatedWriter) and self.output_config.translated_config.enabled
+        elif mode == self.TranslationMode.BILINGUAL:
+            return isinstance(self, BaseBilingualWriter) and self.output_config.bilingual_config.enabled
+        return False
+
     NOT_TRANSLATED_STATUS = (CacheItem.STATUS.UNTRANSLATED, CacheItem.STATUS.TRANSLATING)
 
     def __enter__(self):
@@ -189,6 +238,10 @@ class BaseTranslationWriter(ABC):
         """获取Writer对应的项目类型标识符（用于动态实例化），如 Mtool"""
         pass
 
+    @classmethod
+    def is_environ_supported(cls) -> bool:
+        """用于判断当前环境是否支持该writer"""
+        return True
 
 class BaseTranslatedWriter(BaseTranslationWriter):
     """译文输出基类"""
@@ -244,11 +297,8 @@ class BaseBilingualWriter(BaseTranslationWriter):
 1. `TxtWriter` 要同时支持译文输出和双语输出，所以 `bilingual_config.enable` 也是 `True`
 2. `name_suffix` 代表输出文件的后缀，如果后缀是 `_translated`，那么 `aaa.txt` 的译文文件名是 `aaa_translated.txt`
 3. `output_root` 代表输出的根目录，也就是用户界面 项目配置 -> 输出文件夹，此处译文文件直接在 输出文件夹 下输出，而双语文件在 输出文件夹的子文件夹`bilingual_txt` 下输出
-4. `file_encoding` 代表从之前Reader中保存至 `CacheProject` 中的 `file_encoding`（原始文件编码）
-5. `line_ending` 代表从之前Reader中保存至 `CacheProject` 中的 `line_ending`（原始行尾序列）
-6. **特别注意**：
-
-    `file_encoding` 与 `line_ending` 仅当在 `XxxReader` 的 `read_source_file` 函数中使用了 `read_file_safely` 函数后才存在，否则将使用`utf-8`与系统默认行尾序列的组合
+4. `file_encoding` 代表从之前 `DirectoryReader` 中保存至 `CacheProject` 中的 `file_encoding`（**多数文件**的原始文件编码），<br/>以及从译后的所有文本中判断（`DirectoryWriter`）获取的兼容编码
+5. **此参数暂时被遗弃**~~`line_ending` 代表从之前Reader中保存至 `CacheProject` 中的 `line_ending`（原始行尾序列）~~
 
 ```python
 OutputConfig(
@@ -270,10 +320,7 @@ OutputConfig(
 3. 在 `write_bilingual_file` 方法中输出双语文件，在 `write_translated_file` 方法中输出译文文件
 4. 译文和双语的区别在于怎么替换原文片段，建议抽出公共方法如 `_write_translation_file`，把替换原文片段的逻辑作为参数传入
 5. 此处用到了 `CacheItem` 中未定义的属性 `item.sentence_indent` ，如果不保证属性存在请使用 `getattr`
-6. 保存文件时的 `encoding=self.translated_encoding` 从之前Reader中保存至 `CacheProject` 中的 `file_encoding` 项中获取<br/>（若需要原始的行尾序列，可添加配置 `newline=self.translated_line_ending` 实现）
-7. **特别注意**：
-
-    `translated_encoding` 与 `translated_line_ending` 仅当在 `XxxReader` 的 `read_source_file` 函数中使用了 `read_file_safely` 函数后才存在，否则将使用`utf-8`与系统默认行尾序列的组合
+6. 保存文件时用到的 `encoding=self.translated_encoding`，是从项目（`DirectoryReader`），以及译后的所有文本中（`DirectoryWriter`）综合判断所获取到的兼容编码
 
 ```python
 class TxtWriter(BaseBilingualWriter, BaseTranslatedWriter):
@@ -323,6 +370,11 @@ class TxtWriter(BaseBilingualWriter, BaseTranslatedWriter):
 1. Accessor主要是把复杂的文件读写逻辑从 Reader/Writer 中剥离，通过 `content` 与 Reader/Writer 交互
 2. Reader/Writer 只用关心如何读取/修改 `content`，而具体怎么从文件中读取 `content` 还是把 `content` 写入到文件则由Accessor负责
 3. 参考`DocxReader` 和 `DocxWriter` 读取和写入都用到了 `DocxAccessor` 的 `read_content` 方法
+
+## FileConverter介绍（可选）
+
+1. Converter主要是把难以直接读写的文件格式转换成易读写中间格式。
+2. 参考 `OfficeConversionReader` 和 `OfficeConversionWriter` 通过 `OfficeFileConverter` 把 pdf 文件转换成 docx 文件实现翻译。
 
 ## 贡献指南
 

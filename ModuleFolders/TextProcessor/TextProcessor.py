@@ -14,12 +14,12 @@ class TextProcessor(Base):
         processed_text = {k: v for k, v in text_dict.items()}
         prefix_codes, suffix_codes, placeholder_order = {}, {}, {}
 
-        # 预处理文本前后的空格与换行
-        processed_text, affix_whitespace_storage = TextProcessor.strip_and_record_affix_whitespace(self,processed_text) 
-
         # 译前替换
         if config.pre_translation_switch:
             processed_text = TextProcessor.replace_before_translation(self,config, processed_text) 
+
+        # 预处理文本前后的空格与换行
+        processed_text, affix_whitespace_storage = TextProcessor.strip_and_record_affix_whitespace(self,processed_text) 
 
         # 自动处理代码段
         if config.auto_process_text_code_segment:
@@ -155,8 +155,7 @@ class TextProcessor(Base):
                 # 使用原始字符串避免过多反斜杠转义问题
                 enhanced = fr"\s*{p}\s*"
                 enhanced_patterns.append(enhanced)
-            else:
-                print ("[INFO] 空输入正则")
+
         return enhanced_patterns
 
     def _build_affixes_patterns(self, code_pattern_list: List[str]) -> Tuple[List[str], List[str]]:
@@ -168,8 +167,7 @@ class TextProcessor(Base):
             if p:
                 enhanced = fr"\s*{p}\s*"
                 enhanced_patterns.append(enhanced)
-            else:
-                print ("[INFO] 空输入正则")
+
         # 前后缀使用相同的模式列表
         return enhanced_patterns, enhanced_patterns
 

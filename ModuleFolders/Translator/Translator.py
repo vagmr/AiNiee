@@ -1,3 +1,4 @@
+import os
 import time
 import threading
 import concurrent.futures
@@ -23,7 +24,7 @@ from ModuleFolders.RequestLimiter.RequestLimiter import RequestLimiter
 # 翻译器
 class Translator(Base):
 
-    def __init__(self, plugin_manager: PluginManager) -> None:
+    def __init__(self, plugin_manager: PluginManager, file_reader: FileReader, file_writer: FileOutputer) -> None:
         super().__init__()
 
         # 初始化
@@ -31,8 +32,8 @@ class Translator(Base):
         self.config = TranslatorConfig()
         self.cache_manager = CacheManager()
         self.request_limiter = RequestLimiter()
-        self.file_reader = FileReader()
-        self.file_writer = FileOutputer()
+        self.file_reader = file_reader
+        self.file_writer = file_writer
 
         # 线程锁
         self.data_lock = threading.Lock()
@@ -135,14 +136,13 @@ class Translator(Base):
         # 配置翻译平台信息
         self.config.prepare_for_translation()
 
-        # 请求线程数
+        # 配置请求线程数
         self.config.thread_counts_setting()  # 需要在平台信息配置后面，依赖前面的数值 
 
         # 配置请求限制器
         self.request_limiter.set_limit(self.config.tpm_limit, self.config.rpm_limit)
 
-
-        # 生成缓存列表
+        # 读取输入文件夹的文件，生成缓存
         try:
             if continue_status == True:
                 self.cache_manager.load_from_file(self.config.label_output_path)
@@ -151,6 +151,7 @@ class Translator(Base):
                     self.file_reader.read_files(
                         self.config.translation_project,
                         self.config.label_input_path,
+                        self.config.label_input_exclude_rule
                     )
                 )
         except Exception as e:
@@ -239,7 +240,7 @@ class Translator(Base):
             tasks_list = []
             self.print("")
             for chunk, previous_chunk in tqdm(zip(chunks, previous_chunks), desc = "生成翻译任务", total = len(chunks)):
-                task = TranslatorTask(self.config, self.plugin_manager, self.request_limiter, self.cache_manager) # 实例化
+                task = TranslatorTask(self.config, self.plugin_manager, self.request_limiter) # 实例化
                 task.set_items(chunk)  #传入该任务待翻译原文
                 task.set_previous_items(previous_chunk) # 传入该任务待翻译原文的上文
                 task.prepare(self.config.target_platform,self.config.prompt_preset) # 预先构建消息列表

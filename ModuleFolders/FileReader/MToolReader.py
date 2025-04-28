@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 from ModuleFolders.Cache.CacheItem import CacheItem
-from ModuleFolders.Cache.CacheProject import CacheProject
 from ModuleFolders.FileReader.BaseReader import (
     BaseSourceReader,
     InputConfig,
@@ -23,7 +22,7 @@ class MToolReader(BaseSourceReader):
     def support_file(self):
         return "json"
 
-    def read_source_file(self, file_path: Path, cache_project: CacheProject) -> list[CacheItem]:
+    def read_source_file(self, file_path: Path, detected_encoding: str) -> list[CacheItem]:
         items = []
         json_data = json.loads(file_path.read_text(encoding='utf-8'))
 
@@ -33,3 +32,11 @@ class MToolReader(BaseSourceReader):
             item = text_to_cache_item(key, value)
             items.append(item)
         return items
+
+    def can_read_by_content(self, file_path: Path) -> bool:
+        # {"source_text1": "source_text1?", "source_text2": "source_text2?"}
+        # 即使不是对应编码也不影key value的形式
+        content = json.loads(file_path.read_text(encoding="utf-8", errors='ignore'))
+        if not isinstance(content, dict):
+            return False
+        return all(isinstance(k, str) and isinstance(v, str) for k, v in content.items())

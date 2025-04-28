@@ -162,7 +162,7 @@ class PromptBuilder(Base):
                     numbered_text = f"{index + 1}.[\n"
                     total_lines = len(lines)
                     for sub_index, sub_line in enumerate(lines):
-                        numbered_text += f""""{index + 1}.{total_lines - sub_index}.{sub_line}",\n"""
+                        numbered_text += f'"{index + 1}.{total_lines - sub_index}.,{sub_line}",\n'
                     numbered_text = numbered_text.rstrip('\n')
                     numbered_text = numbered_text.rstrip(',')
                     numbered_text += f"\n]"  # 用json.dumps会影响到原文的转义字符
@@ -183,7 +183,7 @@ class PromptBuilder(Base):
                     numbered_text = f"{index + 1}.[\n"
                     total_lines = len(lines)
                     for sub_index, sub_line in enumerate(lines):
-                        numbered_text += f""""{index + 1}.{total_lines - sub_index}.{sub_line}",\n"""
+                        numbered_text += f'"{index + 1}.{total_lines - sub_index}.,{sub_line}",\n'
                     numbered_text = numbered_text.rstrip('\n')
                     numbered_text = numbered_text.rstrip(',')
                     numbered_text += f"\n]"  # 用json.dumps会影响到原文的转义字符
@@ -460,6 +460,10 @@ class PromptBuilder(Base):
         if len(result) == 0:
             return ""
 
+        # 避免空的默认内容
+        if len(result) == 1 and (result[0]["src"] == ""):
+            return ""
+
         # 初始化变量，以免出错
         glossary_prompt_lines = []
 
@@ -550,9 +554,9 @@ class PromptBuilder(Base):
 
         # 构建结果字符串
         if config.target_language in ("chinese_simplified", "chinese_traditional"):
-            result = "\n###禁翻表，以下特殊标记符无需翻译改动"+ "\n特殊标记符|备注"
+            result = "\n###禁翻表，以下特殊标记符无需翻译"+ "\n特殊标记符|备注"
         else:
-            result = "\n###Non-Translation List,Leave the following marked content untranslated and unmodified"+ "\nSpecial marker|Remarks"
+            result = "\n###Non-Translation List,Leave the following marked content untranslated"+ "\nSpecial marker|Remarks"
 
         for markers, info in exclusion_dict.items():
             result += f"\n{markers}|{info}" if info else f"\n{markers}|"

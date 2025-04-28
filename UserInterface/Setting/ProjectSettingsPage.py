@@ -1,14 +1,68 @@
 from PyQt5.QtCore import QEvent
-from PyQt5.QtWidgets import QFrame
+from PyQt5.QtWidgets import QFrame, QLabel, QLayout, QStackedWidget
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtWidgets import QVBoxLayout
-from qfluentwidgets import FluentIcon
+from qfluentwidgets import FluentIcon, SegmentedWidget
 
 from Base.Base import Base
 from Widget.ComboBoxCard import ComboBoxCard
+from Widget.LineEditCard import LineEditCard
 from Widget.PushButtonCard import PushButtonCard
+from Widget.SwitchButtonCard import SwitchButtonCard
+from Widget.GameDropCard import GameDropCard
+
 
 class ProjectSettingsPage(QFrame, Base):
+
+    def __init__(self, text: str, window, support_project_types: set[str]) -> None:
+        super().__init__(window)
+        self.setObjectName(text.replace(" ", "-"))
+
+
+        self.pivot = SegmentedWidget(self)  # 创建一个 SegmentedWidget 实例，分段式导航栏
+        self.stackedWidget = QStackedWidget(self)  # 创建一个 QStackedWidget 实例，堆叠式窗口
+        self.vBoxLayout = QVBoxLayout(self)  # 创建一个垂直布局管理器
+
+        self.A_settings = ProjectSettingsPage_A('A_settings', window)  # 创建实例，指向界面
+        self.B_settings = ProjectSettingsPage_B('B_settings', window, support_project_types)  # 创建实例，指向界面
+
+        # 添加子界面到分段式导航栏
+        self.addSubInterface(self.A_settings, 'A_settings', '快速设置')
+        self.addSubInterface(self.B_settings, 'B_settings', '详细设置')
+
+        # 将分段式导航栏和堆叠式窗口添加到垂直布局中
+        self.vBoxLayout.addWidget(self.pivot)
+        self.vBoxLayout.addWidget(self.stackedWidget)
+        self.vBoxLayout.setContentsMargins(5, 5, 5, 0)  # 分别设置左、上、右、下的边距
+
+        # 连接堆叠式窗口的 currentChanged 信号到槽函数 onCurrentIndexChanged
+        self.stackedWidget.currentChanged.connect(self.onCurrentIndexChanged)
+        self.stackedWidget.setCurrentWidget(self.A_settings)  # 设置默认显示的子界面为xxx界面
+        self.pivot.setCurrentItem(self.A_settings.objectName())  # 设置分段式导航栏的当前项为xxx界面
+
+    def addSubInterface(self, widget: QLabel, objectName, text):
+        """
+        添加子界面到堆叠式窗口和分段式导航栏
+        """
+        widget.setObjectName(objectName)
+        #widget.setAlignment(Qt.AlignCenter) # 设置 widget 对象的文本（如果是文本控件）在控件中的水平对齐方式
+        self.stackedWidget.addWidget(widget)
+        self.pivot.addItem(
+            routeKey=objectName,
+            text=text,
+            onClick=lambda: self.stackedWidget.setCurrentWidget(widget),
+        )
+
+    def onCurrentIndexChanged(self, index):
+        """
+        槽函数：堆叠式窗口的 currentChanged 信号的槽函数
+        """
+        widget = self.stackedWidget.widget(index)
+        self.pivot.setCurrentItem(widget.objectName())
+
+
+# 快速设置
+class ProjectSettingsPage_A(QFrame, Base):
 
     def __init__(self, text: str, window) -> None:
         super().__init__(window)
@@ -17,11 +71,8 @@ class ProjectSettingsPage(QFrame, Base):
         # 默认配置
         self.default = {
             "target_platform": "deepseek",
-            "translation_project": "Txt",
-            "source_language": "japanese",
-            "target_language": "chinese_simplified",
             "label_input_path": "./input",
-            "label_output_path": "./output",
+            "path_hit_count": 0,
         }
 
         # 载入并保存默认配置
@@ -33,12 +84,8 @@ class ProjectSettingsPage(QFrame, Base):
         self.container.setContentsMargins(24, 24, 24, 24) # 左、上、右、下
 
         # 添加控件
-        self.add_widget_01(self.container, config)
-        self.add_widget_02(self.container, config)
-        self.add_widget_03(self.container, config)
-        self.add_widget_04(self.container, config)
-        self.add_widget_05(self.container, config)
-        self.add_widget_06(self.container, config)
+        self.add_widget_api(self.container, config)
+        self.add_widget_folder_drop(self.container, config)
 
         # 填充
         self.container.addStretch(1)
@@ -70,8 +117,40 @@ class ProjectSettingsPage(QFrame, Base):
         else:
             return ""
 
+    # 输入文件夹
+    def add_widget_folder_drop(self, parent: QLayout, config: dict) -> None:
+
+        def widget_callback(widget: GameDropCard, path: str) -> None:
+            # path 参数直接由信号提供
+            if not path: # 检查路径是否有效
+                return
+
+            # 更新并保存配置
+            current_config = self.load_config()
+            current_config["label_input_path"] = path.strip()
+
+            # 超限清空
+            path_hit_count = widget.getHitCount()
+            if path_hit_count>=10000:
+                path_hit_count = 0
+
+            current_config["path_hit_count"] = path_hit_count
+
+            self.save_config(current_config)
+
+        # 获取配置文件中的初始路径
+        initial_path = config.get("label_input_path", "./input")
+        initial_hits = config.get("path_hit_count", 0) 
+
+        drag_card = GameDropCard(
+            init=initial_path,
+            path_changed=widget_callback,
+            initial_hit_count=initial_hits # 传递初始命中次数
+        )
+        parent.addWidget(drag_card)
+
     # 模型类型
-    def add_widget_01(self, parent, config) -> None:
+    def add_widget_api(self, parent, config) -> None:
 
         def update_widget(widget) -> None:
             config = self.load_config()
@@ -90,13 +169,52 @@ class ProjectSettingsPage(QFrame, Base):
 
         parent.addWidget(
             ComboBoxCard(
-                self.tra("接口名称"),
+                self.tra("接口平台"),
                 self.tra("设置当前翻译项目所使用的接口的名称，注意，选择错误将不能进行翻译"),
                 [],
                 init = init,
                 current_text_changed = current_text_changed,
             )
         )
+
+
+# 详细设置
+class ProjectSettingsPage_B(QFrame, Base):
+
+    def __init__(self, text: str, window, support_project_types: set[str]) -> None:
+        super().__init__(window)
+        self.setObjectName(text.replace(" ", "-"))
+        self.support_project_types = support_project_types
+
+        # 默认配置
+        self.default = {
+            "translation_project": "AutoType",
+            "source_language": "japanese",
+            "target_language": "chinese_simplified",
+            "label_input_exclude_rule": "",
+            "label_output_path": "./output",
+            "auto_set_output_path": True
+        }
+
+        # 载入并保存默认配置
+        config = self.save_config(self.load_config_from_default())
+
+        # 设置主容器
+        self.container = QVBoxLayout(self)
+        self.container.setSpacing(8)
+        self.container.setContentsMargins(24, 24, 24, 24) # 左、上、右、下
+
+        # 添加控件
+        self.add_widget_02(self.container, config)
+        self.add_widget_03(self.container, config)
+        self.add_widget_04(self.container, config)
+        self.add_widget_exclude_rule(self.container, config)
+        self.add_widget_06(self.container, config)
+        self.add_widget_07(self.container, config)
+
+        # 填充
+        self.container.addStretch(1)
+
 
     # 项目类型
     def add_widget_02(self, parent, config) -> None:
@@ -116,15 +234,19 @@ class ProjectSettingsPage(QFrame, Base):
             (self.tra("VNText导出文件"), "Vnt"),
             (self.tra("Ainiee缓存文件"), "Ainiee_cache"),
             (self.tra("ParaTranz导出文件"), "Paratranz"),
+            (self.tra('Pdf文档文件 (需要Microsoft Office)'), "OfficeConversionPdf"),
+            (self.tra('Doc文档文件 (需要Microsoft Office)'), "OfficeConversionDoc"),
+            (self.tra("自动识别文件类型"), "AutoType")
+
         ]
 
         # 生成翻译后的配对列表
-        translated_pairs = [(self.tra(display), value) for display, value in project_pairs]
+        translated_pairs = [(self.tra(display), value) for display, value in project_pairs if value in self.support_project_types]
 
         def init(widget) -> None:
             """初始化时根据存储的值设置当前选项"""
             current_config = self.load_config()
-            current_value = current_config.get("translation_project", "Txt")
+            current_value = current_config.get("translation_project", "AutoType")
             
             # 旧配置兼容层转换(后续版本再删除)
             if current_value == "Txt小说文件":
@@ -180,7 +302,7 @@ class ProjectSettingsPage(QFrame, Base):
             # 通过显示文本查找对应的值
             value = next(
                 (value for display, value in translated_pairs if display == text),
-                "Txt"  # 默认值
+                "AutoType"  # 默认值
             )
             
             config = self.load_config()
@@ -199,7 +321,6 @@ class ProjectSettingsPage(QFrame, Base):
                 current_text_changed=current_text_changed
             )
         )
-
 
     # 原文语言
     def add_widget_03(self, parent, config) -> None:
@@ -390,35 +511,25 @@ class ProjectSettingsPage(QFrame, Base):
             )
         )
 
-    # 输入文件夹
-    def add_widget_05(self, parent, config) -> None:
-        def widget_init(widget) -> None:
-            info_cont = self.tra("当前输入文件夹为") + f" {config.get("label_input_path")}"
-            widget.set_description(info_cont)
-            widget.set_text(self.tra("选择文件夹"))
-            widget.set_icon(FluentIcon.FOLDER_ADD)
+    # 输入的文件/目录排除规则
+    def add_widget_exclude_rule(self, parent, config) -> None:
 
-        def widget_callback(widget) -> None:
-            # 选择文件夹
-            path = QFileDialog.getExistingDirectory(None,  self.tra("选择文件夹"), "")
-            if path == None or path == "":
-                return
+        def init(widget) -> None:
+            widget.set_text(config.get("label_input_exclude_rule"))
+            widget.set_fixed_width(256)
+            widget.set_placeholder_text(self.tra("*.log,aaa/*"))
 
-            # 更新UI
-            info_cont = self.tra("当前输入文件夹为") + f" {path.strip()}"
-            widget.set_description(info_cont)
-
-            # 更新并保存配置
+        def text_changed(widget, text: str) -> None:
             config = self.load_config()
-            config["label_input_path"] = path.strip()
+            config["label_input_exclude_rule"] = text.strip()
             self.save_config(config)
 
         parent.addWidget(
-            PushButtonCard(
-                self.tra("输入文件夹"),
-                "",
-                widget_init,
-                widget_callback,
+            LineEditCard(
+                self.tra("输入文件/目录排除规则"),
+                self.tra("*.log 表示排除所有结尾为 .log 的文件，aaa/* 表示排除输入文件夹下整个 aaa 目录，多个规则用英文逗号分隔"),
+                init=init,
+                text_changed=text_changed,
             )
         )
 
@@ -445,10 +556,45 @@ class ProjectSettingsPage(QFrame, Base):
             config["label_output_path"] = path.strip()
             self.save_config(config)
 
+        # 拖拽文件夹回调
+        def drop_callback(widget, dropped_text) -> None:
+            if not dropped_text:
+                return
+
+            # 更新UI
+            info_cont = self.tra("当前输出文件夹为") + f" {dropped_text.strip()}"
+            widget.set_description(info_cont)
+
+            # 更新并保存配置
+            config = self.load_config()
+            config["label_output_path"] = dropped_text.strip()
+            self.save_config(config)
+
+
         parent.addWidget(
             PushButtonCard(
                 self.tra("输出文件夹(不能与输入文件夹相同)"),
                 "",
+                widget_init,
+                widget_callback,
+                drop_callback,
+            )
+        )
+
+    # 自动设置输出文件夹开关
+    def add_widget_07(self, parent, config) -> None:
+        def widget_init(widget) -> None:
+            widget.set_checked(config.get("auto_set_output_path"))
+
+        def widget_callback(widget, checked: bool) -> None:
+            config = self.load_config()
+            config["auto_set_output_path"] = checked
+            self.save_config(config)
+
+        parent.addWidget(
+            SwitchButtonCard(
+                self.tra("自动设置输出文件夹"),
+                self.tra("启用此功能后，设置为输入文件夹的平级目录，比如输入文件夹为D:/Test/Input，输出文件夹将设置为D:/Test/AiNieeOutput"),
                 widget_init,
                 widget_callback,
             )

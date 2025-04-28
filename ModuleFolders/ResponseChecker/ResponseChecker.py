@@ -7,7 +7,7 @@ class ResponseChecker():
 
 
     # 检查回复内容是否存在问题
-    def check_response_content(self,config,target_platform,response_str,response_dict,source_text_dict):
+    def check_response_content(self,config,target_platform,placeholder_order,response_str,response_dict,source_text_dict):
         # 存储检查结果
         check_result = False
         error_content = "0"
@@ -24,18 +24,6 @@ class ResponseChecker():
             error_content = "模型已拒绝翻译或格式错误，回复内容：" + "\n" + str(response_str)
             return check_result,error_content
 
-
-        # 检查模型是否退化，出现高频词
-        if 'model_degradation_check' in response_check_switch and response_check_switch['model_degradation_check']:
-            if ResponseChecker.model_degradation_detection(self,source_text_dict,response_str):
-                pass
-
-            else:
-                check_result = False
-                error_content = "模型出现退化现象"
-                return check_result,error_content
-
-
         # 检查文本行数
         if ResponseChecker.check_text_line_count(self,source_text_dict,response_dict):
             pass
@@ -43,7 +31,6 @@ class ResponseChecker():
             check_result = False
             error_content = "回复文本行数不一致"
             return check_result,error_content
-
 
         # 检查文本空行
         if ResponseChecker.check_empty_response(self,response_dict):
@@ -81,7 +68,6 @@ class ResponseChecker():
                 error_content = "译文与原文完全相同"
                 return check_result,error_content
 
-
         # 检查是否残留部分原文
         if 'residual_original_text_check' in response_check_switch and response_check_switch['residual_original_text_check']:
             if ResponseChecker.detecting_remaining_original_text(self,source_text_dict,response_dict,source_language):
@@ -91,12 +77,69 @@ class ResponseChecker():
                 error_content = "译文中残留部分原文"
                 return check_result,error_content
 
+        # 检查是否成功保留全部的占位符
+        if  ResponseChecker.check_placeholders_exist(self,placeholder_order,response_dict):
+            pass
+        else:
+            check_result = False
+            error_content = "未能正确保留全部的占位符"
+            return check_result,error_content
+
 
         # 如果检查都没有问题
         check_result = True
         # 存储错误内容
         error_content = "检查无误"
         return check_result,error_content
+
+
+    # 检查是否成功保留全部的占位符
+    def check_placeholders_exist(self,placeholder_info: dict, translated_dict: dict) -> bool:
+        """
+        检查 translated_dict 中的文本是否包含 placeholder_info 中定义的所有占位符。
+
+        Args:
+            placeholder_info: 包含占位符信息的字典。
+                            键是段落 ID (字符串), 值是包含占位符字典的列表。
+                            每个占位符字典包含 "placeholder" (占位符字符串) 键。
+            translated_dict: 包含文本内容的字典。
+                        键是段落 ID (字符串), 值是对应的文本字符串。
+
+        Returns:
+            如果所有定义的占位符都存在于其对应的文本段落中，则返回 True；
+            否则返回 False。
+        """
+        # 非空检查
+        if not placeholder_info:
+            return True
+
+        # 遍历占位符信息字典中的每个段落 ID 和对应的占位符列表
+        for text_id, placeholder_list in placeholder_info.items():
+            # 检查文本内容字典中是否存在对应的段落 ID
+            if text_id not in translated_dict:
+                return False
+
+            # 获取对应段落的文本内容
+            segment_text = translated_dict[text_id]
+
+            # 如果当前段落没有需要检查的占位符，则跳到下一个段落
+            if not placeholder_list:
+                continue
+
+            # 遍历当前段落需要检查的所有占位符
+            for placeholder_data in placeholder_list:
+                placeholder = placeholder_data.get("placeholder")
+
+                # 确保 'placeholder' 键存在且值是字符串
+                if not placeholder or not isinstance(placeholder, str):
+                    continue 
+
+                # 核心检查：占位符是否存在于文本中
+                if placeholder not in segment_text:
+                    return False  # 发现一个缺失，即可确定结果为 False，提前退出
+
+        return True
+
 
 
     # 检查数字序号是否正确
@@ -172,8 +215,8 @@ class ResponseChecker():
 
                 # 检查每一行是否都有实际内容（除了序号和格式标记外）
                 for i, line in enumerate(input_lines):
-                    # 移除序号部分（如"1.2."）
-                    content_after_prefix = re.sub(r'^\s*\d+\.(\d+\.)?\s*', '', line).strip()
+                    # 移除序号部分（如"1.2.,"）
+                    content_after_prefix = re.sub(r'^\s*\d+\.\d+\.,\s*', '', line).strip()
 
                     # 如果回复行为空
                     if not content_after_prefix:
@@ -262,58 +305,36 @@ class ResponseChecker():
         return any(char in s for char in special_chars)
 
 
-    # 模型退化检测，高频语气词
-    def model_degradation_detection(self,source_text_dict, s, count=80):
-        """
-        检查字符串中是否存在任何字符连续出现指定次数。
-
-        :param s: 输入的字符串
-        :param count: 需要检查的连续次数，默认为80
-        :return: 如果存在字符连续出现指定次数，则返回False，否则返回True
-        """
-
-        # 不检测单行
-        if len(source_text_dict) ==1 :
-           return True
-
-
-        for i in range(len(s) - count + 1):
-            if len(set(s[i:i+count])) == 1:
-                return False
-        return True
-
 
     # 检查残留原文的算法
     def detecting_remaining_original_text(self,dictA, dictB, language):
 
         # 使用复制变量，避免影响到原变量
-        dict1 = dictA.copy()
-        dict2 = dictB.copy()
+        dict_src = dictA.copy()
+        dict_dst = dictB.copy()
 
         # 考量到代码文本，不支持的语言不作检查
         if language not in ("japanese","korean","chinese_simplified","chinese_traditional"):
             return True
 
         # 避免检查单或者少行字典
-        if len(dict1) <=5 :
+        if len(dict_src) <=1 :
             return True
 
-        # 不同语言的标点符号字符集
-        punctuation_sets = re.compile(
+        # 不同语言的通用标点符号字符集
+        punctuation_pattern_sets = re.compile(
             r'['
             r'\u3000-\u303F'   # CJK符号和标点
             r'\uFF01-\uFF9F'   # 全角ASCII、半角片假名和日文标点
-            r'\u314F-\u3163'   # 韩文标点符号
-            r'\u0400-\u04FF'   # 俄语字母
             r'\u0500-\u052F'   # 俄语扩展字符（含标点）
             r']+', re.UNICODE  # 使用 + 来匹配一个或多个字符
         )
 
         # 特定的无法过滤的标点符号集
-        punctuation_list_A = ['(', ')', '・', '?', '？', '『', '』', '（', '）', '＜', '＞', '·', '～', 'ー', '@', '＠', '·', '.', '♡', '…', '。', '！', '、', '，']  
+        punctuation_list = ['(', ')', '・', '?', '？', '『', '』', '（', '）', '＜', '＞', '·', '～', 'ー', '@', '＠', '·', '.', '♡', '…', '。', '！', '、', '，']  
 
         # 定义不同语言的文本字符集对应的正则表达式
-        patterns_all = {
+        patterns_language = {
             'japanese': re.compile(
                 r'['
                 r'\u3041-\u3096'  # 平假名
@@ -338,38 +359,46 @@ class ResponseChecker():
                 r']+', re.UNICODE
             ),
         }
-        # 根据语言选择合适的正则表达式
-        pattern = patterns_all.get(language)
-        punctuation_pattern = punctuation_sets
-        if not pattern:
-            raise ValueError("Unsupported language")
 
         # 存储计数结果的字典
         count_results = 0
 
-        # 遍历字典2中的每个键值对
-        for key2, value2 in dict2.items():
-            # 检查字典1中是否有对应的键
-            if key2 in dict1:
-                # 提取字典1值中的文本
-                text1 = dict1[key2]
-                # 移除字典2值中的各种通用的标点符号
-                text2_clean1 = re.sub(punctuation_pattern, '', value2)
-                # 移除字典2值中的特定的标点符号
-                text2_clean2 = ResponseChecker.remove_punctuation(self,text2_clean1, punctuation_list_A)
-                # 提取字典2值中的指定语言的文本
-                text2 = pattern.findall(text2_clean2)
-                # 提取为空内容，则跳过
-                if text2 =='':
+        # 遍历译文字典中的每个键值对
+        for key_dst, value_dst in dict_dst.items():
+
+            # 提取译文中的指定语言的文本
+            text_lsit =  patterns_language.get(language).findall(value_dst)
+            # 提取为空内容，则跳过
+            if not text_lsit:
+                continue
+
+            # 循环处理，移除译文中的所有标点符号，并进行检查
+            for text in text_lsit:
+                # 移除标点符号
+                text = re.sub(punctuation_pattern_sets, '', text)
+                text = ResponseChecker.remove_punctuation(self,text, punctuation_list)
+
+                # 如果移除后为空，则跳过
+                if not text:
                     continue
-                # 将列表转换为字符串
-                text2_str = ''.join(text2)
-                # 如果字典2中的残留文本在字典1中的文本中出现，则计数加1
-                if text2_str and (text2_str in text1):
-                    count_results += 1
+
+                # 检查是否有原文残留
+                text_src = dict_src[key_dst]
+                if text_src:
+
+                    # 检查是否在原文中
+                    if  text in text_src:
+                        count_results += 1        
+
+                    # 如果没有，则检查是否有原文的单个在原文中
+                    else:
+                        for char in text:
+                            if char in text_src:
+                                count_results += 1                 
 
         # 根据出现次数判断结果
-        if  count_results >=2:
+        #print("count_results:", count_results)  # 调试输出
+        if  count_results >=1:
             return False
 
         return True

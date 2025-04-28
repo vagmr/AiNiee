@@ -83,6 +83,24 @@
       "繁中": "ParaTranz導出檔案",
       "English": "ParaTranz Export File",
       "日本語": "ParaTranzエクスポートファイル"
+    },
+    "Pdf文档文件 (需要Microsoft Office)": {
+      "简中": "Pdf文档文件 (需要Microsoft Office)",
+      "繁中": "Pdf文件檔案 (需要Microsoft Office)",
+      "English": "Pdf Document File (requires Microsoft Office)",
+      "日本語": "Pdfドキュメントファイル (Microsoft Officeが必要)"
+    },
+    "Doc文档文件 (需要Microsoft Office)": {
+      "简中": "Doc文档文件 (需要Microsoft Office)",
+      "繁中": "Doc文件檔案 (需要Microsoft Office)",
+      "English": "Doc Document File (requires Microsoft Office)",
+      "日本語": "Docドキュメントファイル (Microsoft Officeが必要)"
+    },
+    "自动识别文件类型": {
+      "简中": "自动识别文件类型",
+      "繁中": "自動識別檔案類型",
+      "English": "Automatically identify file types",
+      "日本語": "自動的にファイルタイプを識別する"
     }
   },
 

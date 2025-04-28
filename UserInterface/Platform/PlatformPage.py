@@ -199,7 +199,6 @@ class PlatformPage(QFrame, Base):
                 self.warning_toast("", self.tra("接口名称不能为空"))
                 return
 
-    
             config = self.load_config()
 
             # 检查平台是否存在
@@ -283,8 +282,8 @@ class PlatformPage(QFrame, Base):
                                 partial(self.show_api_edit_page, k),
                             ),
                             (
-                                FluentIcon.ALBUM,
-                                self.tra("重命名接口"),
+                                FluentIcon.LABEL,
+                                self.tra("更名接口"),
                                 partial(self.rename_platform, k),
                             ),
                             (
@@ -298,14 +297,14 @@ class PlatformPage(QFrame, Base):
                                 partial(self.show_args_edit_page, k),
                             ),
                             (
-                                FluentIcon.SEND,
-                                self.tra("测试接口"),
-                                partial(self.api_test, k),
-                            ),
-                            (
                                 FluentIcon.DELETE,
                                 self.tra("删除接口"),
                                 partial(self.delete_platform, k),
+                            ),
+                            (
+                                FluentIcon.SEND,
+                                self.tra("测试接口"),
+                                partial(self.api_test, k),
                             ),
                         ],
                     },

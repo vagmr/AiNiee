@@ -4,7 +4,6 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 from ModuleFolders.Cache.CacheItem import CacheItem
-from ModuleFolders.Cache.CacheProject import CacheProject
 from ModuleFolders.FileAccessor.EpubAccessor import EpubAccessor
 from ModuleFolders.FileReader.BaseReader import (
     BaseSourceReader,
@@ -14,9 +13,9 @@ from ModuleFolders.FileReader.BaseReader import (
 
 
 class EpubReader(BaseSourceReader):
-    def __init__(self, input_config: InputConfig, file_accessor: EpubAccessor):
+    def __init__(self, input_config: InputConfig):
         super().__init__(input_config)
-        self.file_accessor = file_accessor
+        self.file_accessor = EpubAccessor()
 
     @classmethod
     def get_project_type(cls):
@@ -39,7 +38,7 @@ class EpubReader(BaseSourceReader):
         ("div", r"<div[^>]*>(.*?)</div>", ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'text']),
     ]
 
-    def read_source_file(self, file_path: Path, cache_project: CacheProject) -> list[CacheItem]:
+    def read_source_file(self, file_path: Path, detected_encoding: str) -> list[CacheItem]:
 
         items = []
         for item_id, html_content in self.file_accessor.read_content(file_path).items():
