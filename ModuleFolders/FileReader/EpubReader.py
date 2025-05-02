@@ -3,12 +3,14 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
+from ModuleFolders.Cache.CacheFile import CacheFile
 from ModuleFolders.Cache.CacheItem import CacheItem
+from ModuleFolders.Cache.CacheProject import ProjectType
 from ModuleFolders.FileAccessor.EpubAccessor import EpubAccessor
 from ModuleFolders.FileReader.BaseReader import (
     BaseSourceReader,
     InputConfig,
-    text_to_cache_item
+    PreReadMetadata
 )
 
 
@@ -19,7 +21,7 @@ class EpubReader(BaseSourceReader):
 
     @classmethod
     def get_project_type(cls):
-        return "Epub"
+        return ProjectType.EPUB
 
     @property
     def support_file(self):
@@ -33,12 +35,14 @@ class EpubReader(BaseSourceReader):
         # 有些p标签内容嵌套在li标签里面,
         ("li", r"<li[^>]*>(.*?)</li>", ['p']),
         ("text", r"<text[^>]*>(.*?)</text>", []),
+        ("blockquote", r"<blockquote[^>]*>(.*?)</blockquote>", []),
+        ("td", r"<td[^>]*>(.*?)</td>", []),
 
         # div标签要放在最后面，这是提取不到前面任何文本内容再考虑的标签
         ("div", r"<div[^>]*>(.*?)</div>", ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'text']),
     ]
 
-    def read_source_file(self, file_path: Path, detected_encoding: str) -> list[CacheItem]:
+    def on_read_source(self, file_path: Path, pre_read_metadata: PreReadMetadata) -> CacheFile:
 
         items = []
         for item_id, html_content in self.file_accessor.read_content(file_path).items():
@@ -59,11 +63,11 @@ class EpubReader(BaseSourceReader):
                         forbidden_soup_elemnt = soup.find(forbidden_tags)
                         if forbidden_soup_elemnt is not None:
                             continue
-
-                    item = text_to_cache_item(text_content)
-                    item.original_html = html_text
-                    item.tag_type = tag_type  # 直接使用循环的 tag_type
-                    item.item_id = item_id
-                    items.append(item)
+                    extra = {
+                        "original_html": html_text,
+                        "tag_type": tag_type,
+                        "item_id": item_id,
+                    }
+                    items.append(CacheItem(source_text=text_content, extra=extra))
         self.file_accessor.clear_temp(file_path)
-        return items
+        return CacheFile(items=items)

@@ -5,18 +5,17 @@ import random
 from functools import partial
 
 from PyQt5.QtCore import QUrl
-from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtGui import QDesktopServices, QIcon
 from PyQt5.QtWidgets import QFrame
 from PyQt5.QtWidgets import QVBoxLayout
 
-from qfluentwidgets import Action
+from qfluentwidgets import Action, DropDownPushButton, PrimaryPushButton
 from qfluentwidgets import RoundMenu
 from qfluentwidgets import FluentIcon
 from qfluentwidgets import PushButton
-from qfluentwidgets import PrimaryDropDownPushButton
 
 from Base.Base import Base
-from Widget.FlowCard import FlowCard
+from Widget.APITypeCard import APITypeCard
 from Widget.LineEditMessageBox import LineEditMessageBox
 from UserInterface.Platform.APIEditPage import APIEditPage
 from UserInterface.Platform.ArgsEditPage import ArgsEditPage
@@ -39,6 +38,8 @@ class PlatformPage(QFrame, Base):
         "temperature": 1.0,
         "presence_penalty": 0.0,
         "frequency_penalty": 0.0,
+        "think_switch": False,
+        "think_depth": "low",
         "auto_complete": True,
         # 自定义平台一般不需要太多默认模型
         "model_datas": [
@@ -61,6 +62,8 @@ class PlatformPage(QFrame, Base):
             "presence_penalty",
             "frequency_penalty",
             "extra_body",
+            "think_switch",
+            "think_depth"
         ],
     }
 
@@ -130,10 +133,10 @@ class PlatformPage(QFrame, Base):
         Base.work_status = Base.STATUS.IDLE
 
         if len(data.get("failure", [])) > 0:
-            info_cont = self.tra("接口测试结果：成功") + f"{len(data.get("success", []))}"+ "......" + self.tra("失败") + f"{len(data.get("failure", []))}" + "......"
+            info_cont = self.tra("接口测试结果：成功") + f"   {len(data.get("success", []))}"+ "......" + self.tra("失败") + f"{   len(data.get("failure", []))}" + "......"
             self.error_toast("", info_cont)
         else:
-            info_cont = self.tra("接口测试结果：成功") + f"{len(data.get("success", []))}"+ "......" + self.tra("失败") + f"{len(data.get("failure", []))}" + "......"
+            info_cont = self.tra("接口测试结果：成功") + f"   {len(data.get("success", []))}"+ "......" + self.tra("失败") + f"{   len(data.get("failure", []))}" + "......"
             self.success_toast("", info_cont)
 
     # 加载并更新预设配置
@@ -247,6 +250,7 @@ class PlatformPage(QFrame, Base):
                 ui_datas.append(
                     {
                         "name": v.get("name"),
+                        "icon": v.get("icon"),
                         "menus": [
                             (
                                 FluentIcon.EDIT,
@@ -275,6 +279,7 @@ class PlatformPage(QFrame, Base):
                 ui_datas.append(
                     {
                         "name": v.get("name"),
+                        "icon": v.get("icon"),
                         "menus": [
                             (
                                 FluentIcon.EDIT,
@@ -327,9 +332,15 @@ class PlatformPage(QFrame, Base):
     # 初始化下拉按钮
     def init_drop_down_push_button(self, widget, datas):
         for item in datas:
-            drop_down_push_button = PrimaryDropDownPushButton(item.get("name"))
+            drop_down_push_button = DropDownPushButton(item.get("name"))
+            if item.get("icon"):
+                icon_name = item.get("icon") + '.png'
+                icon_path = os.path.join(".", "Resource", "platforms", "Icon", icon_name)                                                  
+                drop_down_push_button.setIcon(QIcon(icon_path))
+
             drop_down_push_button.setFixedWidth(192)
             drop_down_push_button.setContentsMargins(4, 0, 4, 0) # 左、上、右、下
+
             widget.add_widget(drop_down_push_button)
 
             menu = RoundMenu(item.get("name"))  # 修改为传递菜单标题，以免出现输入类型错误
@@ -373,22 +384,26 @@ class PlatformPage(QFrame, Base):
                 self.generate_ui_datas(platforms, False),
             )
 
+        # 本地接口分类的接口数据 
         platforms = {k:v for k, v in config.get("platforms").items() if v.get("group") == "local"}
         parent.addWidget(
-            FlowCard(
+            APITypeCard(
                 self.tra("本地接口"),
                 self.tra("管理应用内置的本地大语言模型的接口"),
+                icon = FluentIcon.CONNECT,
                 init = init,
             )
         )
 
     # 添加主体-在线接口
     def add_body_widget(self, parent, config):
+
         platforms = {k:v for k, v in config.get("platforms").items() if v.get("group") == "online"}
         parent.addWidget(
-            FlowCard(
+            APITypeCard(
                 self.tra("官方接口"),
                 self.tra("管理应用内置的主流大语言模型的官方接口"),
+                icon = FluentIcon.ROBOT,
                 init = lambda widget: self.init_drop_down_push_button(
                     widget,
                     self.generate_ui_datas(platforms, False),
@@ -426,7 +441,7 @@ class PlatformPage(QFrame, Base):
 
         def init(widget):
             # 添加新增按钮
-            add_button = PushButton(self.tra("新增"))
+            add_button = PrimaryPushButton(self.tra("新增"))
             add_button.setIcon(FluentIcon.ADD_TO)
             add_button.setContentsMargins(4, 0, 4, 0)
             add_button.clicked.connect(lambda: on_add_button_clicked(self))
@@ -435,9 +450,10 @@ class PlatformPage(QFrame, Base):
             # 更新ui
             self.update_custom_platform_widgets(widget)
 
-        self.flow_card = FlowCard(
+        self.flow_card = APITypeCard(
             self.tra("自定义接口"),
             self.tra("在此添加和管理任何符合 OpenAI 格式或者 Anthropic 格式的大语言模型的接口"),
+            icon = FluentIcon.ASTERISK,
             init = init,
         )
         parent.addWidget(self.flow_card)

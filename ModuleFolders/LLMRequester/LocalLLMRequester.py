@@ -15,6 +15,15 @@ class LocalLLMRequester(Base):
             temperature = platform_config.get("temperature", 1.0)
             top_p = platform_config.get("top_p", 1.0)
             frequency_penalty = platform_config.get("frequency_penalty", 0)
+            think_switch = platform_config.get("think_switch")
+
+
+            # 假如打开了思考开关
+            if think_switch:
+                extra_body={"enable_thinking": True}
+            else:
+                extra_body={}
+
 
             # 插入系统消息
             if system_prompt:
@@ -29,6 +38,7 @@ class LocalLLMRequester(Base):
             client = LLMClientFactory().get_openai_client_local(platform_config)
 
             response = client.chat.completions.create(
+                extra_body=extra_body,
                 model=model_name,
                 messages=messages,
                 top_p=top_p,
