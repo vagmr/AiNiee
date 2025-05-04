@@ -10,8 +10,21 @@ cmd = [
     # "--distpath=./dist/AiNiee" #指定输出目录
 ]
 
+# 需要排除的软件包
+# 由mediapipe导入，但不需要这些任务，会增加很多大小
+MODULES_TO_EXCLUDE = [
+    "jax",
+    "jaxlib",
+    "scipy",
+]
+
+# 添加显式排除参数
+for module_name in MODULES_TO_EXCLUDE:
+    cmd.append(f"--exclude-module={module_name}")
+    print(f"[INFO] Explicitly excluding module: {module_name}")
+
 if os.path.exists("./requirements.txt"):
-    with open("./requirements.txt", "r", encoding = "utf-8") as reader:
+    with open("./requirements.txt", "r", encoding="utf-8") as reader:
         for line in reader:
             if "#" not in line:
                 cmd.append("--hidden-import=" + line.strip())
