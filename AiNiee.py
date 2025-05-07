@@ -33,7 +33,9 @@ import rapidjson as json
 from rich import print
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QSplashScreen 
+from PyQt5.QtWidgets import QApplication, QSplashScreen
+
+
 
 
 # 过滤protobuf的警告信息
@@ -84,12 +86,16 @@ if __name__ == "__main__":
     print(f"[[green]INFO[/]] Current working directory is {script_dir}")
 
     # 启动页面
-    logo_path = os.path.join(".", "Resource", "Logo", "logo.png")
+    logo_path = os.path.join(".", "Resource", "Logo", "launch.png")
     icon = QIcon(logo_path)  # 使用QIcon加载logo
     pixmap = icon.pixmap(400, 200)  # 从QIcon获取指定大小的QPixmap
     splash = QSplashScreen(pixmap, Qt.WindowStaysOnTopHint)
     splash.setEnabled(False)  # 禁用用户交互，可能改善渲染
 
+
+
+    # 显示初始化消息
+    splash.showMessage("正在初始化...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
 
     # 显示启动页面
     splash.show()
@@ -117,19 +123,28 @@ if __name__ == "__main__":
         font.setHintingPreference(QFont.PreferNoHinting)
     app.setFont(font)
 
+    # 更新启动画面进度 - 10%
+    splash.showMessage("正在加载插件管理器... (10%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+    app.processEvents() # 启动画面更新
+
     # 创建全局插件管理器
     from Base.PluginManager import PluginManager
     plugin_manager = PluginManager()
     plugin_path = os.path.join(".", "PluginScripts")
     plugin_manager.load_plugins_from_directory(plugin_path)
 
+    # 更新启动画面进度 - 25%
+    splash.showMessage("正在加载文件读写器... (25%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
     app.processEvents() # 启动画面更新
+
     # 创建全局文件读写器(高性能消耗)
     from ModuleFolders.FileReader.FileReader import FileReader
     file_reader = FileReader()
     from ModuleFolders.FileOutputer.FileOutputer import FileOutputer
     file_writer = FileOutputer()
 
+    # 更新启动画面进度 - 50%
+    splash.showMessage("正在加载核心组件... (50%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
     app.processEvents() # 启动画面更新
     # 创建全局窗口对象(高性能消耗)
     from UserInterface.AppFluentWindow import AppFluentWindow
@@ -139,6 +154,10 @@ if __name__ == "__main__":
         support_project_types=file_reader.get_support_project_types(),
     )
 
+    # 更新启动画面进度 - 60%
+    splash.showMessage("正在加载测试器组件... (60%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+    app.processEvents() # 启动画面更新
+
     # 创建全局接口测试器对象，并初始化订阅事件
     from ModuleFolders.RequestTester.RequestTester import RequestTester
     request_tester = RequestTester()
@@ -147,17 +166,25 @@ if __name__ == "__main__":
     from ModuleFolders.RequestTester.ProcessTester import ProcessTester
     process_tester = ProcessTester()
 
+    # 更新启动画面进度 - 75%
+    splash.showMessage("正在加载翻译器... (75%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+    app.processEvents() # 启动画面更新
+
     # 创建翻译器对象，并初始化订阅事件(高性能消耗)
     from ModuleFolders.Translator.Translator import Translator
     translator = Translator(
         plugin_manager=plugin_manager, file_reader=file_reader, file_writer=file_writer
     )
 
+    # 更新启动画面进度 - 100%
+    splash.showMessage("启动完成，正在打开应用... (100%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+    app.processEvents() # 启动画面更新
+
     # 显示全局窗口
     app_fluent_window.show()
 
     # 隐藏启动页面
-    splash.finish(app_fluent_window) 
+    splash.finish(app_fluent_window)
 
     # 进入事件循环，等待用户操作
     sys.exit(app.exec_())
