@@ -65,6 +65,28 @@ def load_config() -> dict:
     return config
 
 
+def update_splash_message(splash, message, app, font_size=10, font_weight=QFont.Bold):
+    """
+    参数:
+        splash: QSplashScreen 实例
+        message: 要显示的消息
+        app: QApplication 实例，用于处理事件
+        font_size: 字体大小，默认为10
+        font_weight: 字体粗细，默认为粗体
+    """
+    # 设置字体
+    font = QFont("Microsoft YaHei")  # 使用微软雅黑字体
+    font.setPointSize(font_size)
+    font.setWeight(font_weight)
+    splash.setFont(font)
+
+    # 显示消息
+    splash.showMessage(message, Qt.AlignBottom | Qt.AlignCenter, Qt.black)
+
+    # 处理事件，确保启动画面能立即显示和更新
+    app.processEvents()
+
+
 if __name__ == "__main__":
     # 开启子进程支持
     multiprocessing.freeze_support()
@@ -94,12 +116,11 @@ if __name__ == "__main__":
 
 
 
-    # 显示初始化消息
-    splash.showMessage("正在初始化...", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-
     # 显示启动页面
     splash.show()
-    app.processEvents() # 处理事件，确保启动画面能立即显示和更新
+
+    # 显示初始化消息
+    update_splash_message(splash, "正在初始化...", app)
 
     # 加载配置文件
     config = load_config()
@@ -124,8 +145,7 @@ if __name__ == "__main__":
     app.setFont(font)
 
     # 更新启动画面进度 - 10%
-    splash.showMessage("正在加载插件管理器... (10%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-    app.processEvents() # 启动画面更新
+    update_splash_message(splash, "正在加载插件管理器... (10%)", app)
 
     # 创建全局插件管理器
     from Base.PluginManager import PluginManager
@@ -134,8 +154,7 @@ if __name__ == "__main__":
     plugin_manager.load_plugins_from_directory(plugin_path)
 
     # 更新启动画面进度 - 25%
-    splash.showMessage("正在加载文件读写器... (25%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-    app.processEvents() # 启动画面更新
+    update_splash_message(splash, "正在加载文件读写器... (25%)", app)
 
     # 创建全局文件读写器(高性能消耗)
     from ModuleFolders.FileReader.FileReader import FileReader
@@ -144,8 +163,7 @@ if __name__ == "__main__":
     file_writer = FileOutputer()
 
     # 更新启动画面进度 - 50%
-    splash.showMessage("正在加载核心组件... (50%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-    app.processEvents() # 启动画面更新
+    update_splash_message(splash, "正在加载核心组件... (50%)", app)
     # 创建全局窗口对象(高性能消耗)
     from UserInterface.AppFluentWindow import AppFluentWindow
     app_fluent_window = AppFluentWindow(
@@ -155,8 +173,7 @@ if __name__ == "__main__":
     )
 
     # 更新启动画面进度 - 60%
-    splash.showMessage("正在加载测试器组件... (60%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-    app.processEvents() # 启动画面更新
+    update_splash_message(splash, "正在加载测试器组件... (60%)", app)
 
     # 创建全局接口测试器对象，并初始化订阅事件
     from ModuleFolders.RequestTester.RequestTester import RequestTester
@@ -167,8 +184,7 @@ if __name__ == "__main__":
     process_tester = ProcessTester()
 
     # 更新启动画面进度 - 75%
-    splash.showMessage("正在加载翻译器... (75%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-    app.processEvents() # 启动画面更新
+    update_splash_message(splash, "正在加载翻译器... (75%)", app)
 
     # 创建翻译器对象，并初始化订阅事件(高性能消耗)
     from ModuleFolders.Translator.Translator import Translator
@@ -177,8 +193,7 @@ if __name__ == "__main__":
     )
 
     # 更新启动画面进度 - 100%
-    splash.showMessage("启动完成，正在打开应用... (100%)", Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-    app.processEvents() # 启动画面更新
+    update_splash_message(splash, "启动完成，正在打开应用... (100%)", app)
 
     # 显示全局窗口
     app_fluent_window.show()
