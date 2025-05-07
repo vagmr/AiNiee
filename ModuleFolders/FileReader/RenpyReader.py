@@ -1,4 +1,5 @@
 import re
+import os
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -17,7 +18,7 @@ class RenpyReader(BaseSourceReader):
     读取 rpy 文件并提取翻译条目，支持下面格式:
     1. old "..." / new "..."
     2. # tag "..." / tag "..."
-    3. # "..." / "..." 
+    3. # "..." / "..."
     能处理文本中包含的双引号。
     """
     def __init__(self, input_config: InputConfig):
@@ -38,6 +39,10 @@ class RenpyReader(BaseSourceReader):
     COMMENT_TRANSLATION_START_PATTERN = re.compile(r"^\s*#\s*")
     # 用于检查行是否以翻译代码行格式开头的正则表达式（标签或仅引号）
     CODE_TRANSLATION_START_PATTERN = re.compile(r"^\s*(?:[a-zA-Z][\w\s]*\s+)?\"")
+    # 用于提取代码行中的角色变量
+    CHARACTER_VARIABLE_PATTERN = re.compile(r"^\s*([a-zA-Z]\w*)\s+\".*")
+    # 用于检查行是否是文件路径注释
+    FILE_PATH_PATTERN = re.compile(r"^\s*#\s*game/.*:\d+")
 
     def _extract_quoted_robust(self, line: str) -> Optional[str]:
         """
@@ -58,8 +63,11 @@ class RenpyReader(BaseSourceReader):
         for i in range(start_index, len(lines)):
             line = lines[i]
             stripped = line.strip()
-            # 跳过空行和文件路径注释
-            if not stripped or stripped.startswith("# game/") or stripped.startswith("# renpy/"):
+            # 跳过空行
+            if not stripped:
+                continue
+            # 跳过文件路径注释行
+            if self.FILE_PATH_PATTERN.match(stripped):
                 continue
             # 跳过 translate 块定义
             if stripped.startswith("translate "):
@@ -68,6 +76,8 @@ class RenpyReader(BaseSourceReader):
         return None
 
     def on_read_source(self, file_path: Path, pre_read_metadata: PreReadMetadata) -> CacheFile:
+        # 检查是否启用了角色变量增强插件
+        renpy_character_plugin_active = os.environ.get("RENPY_CHARACTER_PLUGIN_ACTIVE", "0") == "1"
 
         lines = file_path.read_text(encoding=pre_read_metadata.encoding).splitlines()
 
@@ -112,7 +122,11 @@ class RenpyReader(BaseSourceReader):
 
             # --- 格式 2 & 3: 注释行后跟代码行 ---
             elif self.COMMENT_TRANSLATION_START_PATTERN.match(stripped):
-                comment_line_num = i
+                # 跳过文件路径注释行
+                if self.FILE_PATH_PATTERN.match(stripped):
+                    i += 1
+                    continue
+
                 comment_line = line
                 # 查找下一个相关的代码行
                 next_line_info = self._find_next_relevant_line(lines, i + 1)
@@ -126,6 +140,10 @@ class RenpyReader(BaseSourceReader):
                     # 从代码行提取潜在的翻译文本
                     code_text = self._extract_quoted_robust(code_line)
 
+                    # 调试输出
+                    if renpy_character_plugin_active:
+                        print(f"[DEBUG][RenpyReader] 处理代码行: {code_stripped}")
+
                     if comment_source is not None and code_text is not None:
                         # 检查注释行上的标签（# 之后和 " 之前的部分）
                         comment_tag_match = self.TAG_PATTERN.match(comment_line.split('#', 1)[-1])
@@ -134,6 +152,7 @@ class RenpyReader(BaseSourceReader):
 
                         tag = None
                         format_type = None
+                        speaker_var = None
 
                         # 情况 2: # tag "..." / tag "..."
                         if comment_tag_match and code_tag_match:
@@ -142,6 +161,9 @@ class RenpyReader(BaseSourceReader):
                             if comment_tag == code_tag:
                                 tag = code_tag
                                 format_type = "comment_tag"
+                                # 如果启用了角色变量增强插件，使用标签作为角色变量
+                                if renpy_character_plugin_active:
+                                    speaker_var = tag
 
                         # 情况 3: # "..." / "..." (匹配时不涉及标签)
                         # 检查注释是否以 '# "' 开头（去除 # 后的空格后）
@@ -150,14 +172,29 @@ class RenpyReader(BaseSourceReader):
                              code_stripped.startswith('"'):
                              format_type = "comment_no_tag"
 
+                        # 如果是情况3，尝试从代码行提取角色变量
+                        if renpy_character_plugin_active:
+                            # 尝试从代码行提取角色变量，无论是哪种格式
+                            char_var_match = self.CHARACTER_VARIABLE_PATTERN.match(code_stripped)
+                            if char_var_match:
+                                speaker_var = char_var_match.group(1)
+                                # 调试输出
+                                print(f"[DEBUG][RenpyReader] 从代码行提取到角色变量: {speaker_var}, 代码行: {code_stripped}")
+
                         if format_type:
-                            entries.append({
+                            entry_data = {
                                 "source": comment_source, # 原文在注释中
                                 "translated": code_text, # 要翻译的文本在代码行中
                                 "new_line_num": code_line_num, # 需要修改的代码行的行号
                                 "format_type": format_type,
                                 "tag": tag # 如果存在则存储标签（格式 2）
-                            })
+                            }
+
+                            # 如果找到了角色变量，添加到条目中
+                            if speaker_var:
+                                entry_data["_rcp_speaker_variable"] = speaker_var
+
+                            entries.append(entry_data)
                             i = code_line_num + 1 # 循环跳过已处理的代码行
                             continue # 跳过默认的增量
 
@@ -174,6 +211,11 @@ class RenpyReader(BaseSourceReader):
                 "format_type": entry["format_type"],
                 "tag": entry.get("tag"),  # 使用 .get() 以确保安全
             }
+
+            # 如果有角色变量信息，添加到extra中
+            if "_rcp_speaker_variable" in entry:
+                extra["_rcp_speaker_variable"] = entry["_rcp_speaker_variable"]
+
             item = CacheItem(source_text=source_text, translated_text=entry["translated"], extra=extra)
             items.append(item)
         return CacheFile(items=items)
