@@ -3,6 +3,8 @@ import pathlib
 import re
 import sys
 import time
+import tempfile
+import shutil
 from typing import Union
 
 import chardet
@@ -16,6 +18,8 @@ from ModuleFolders.Cache.CacheItem import CacheItem
 
 _LANG_DETECTOR_INSTANCE: LanguageDetector | None = None
 """语言检测器单例实现"""
+_TEMP_MODEL_DIR = None
+"""临时模型目录"""
 HAS_UNUSUAL_ENG_REGEX = re.compile(
     r"^(?:(?=.*_)(?=.*[a-zA-Z0-9])\S*|(?=.*[a-zA-Z])(?=.*[0-9])[a-zA-Z0-9]*)$"
 )
@@ -24,7 +28,7 @@ HAS_UNUSUAL_ENG_REGEX = re.compile(
 # 加载语言检测器(全局)
 def get_lang_detector():
     """获取语言检测器的全局单例实例"""
-    global _LANG_DETECTOR_INSTANCE
+    global _LANG_DETECTOR_INSTANCE, _TEMP_MODEL_DIR
     if _LANG_DETECTOR_INSTANCE is None:
         rich.print("[[green]INFO[/]] 加载 MediaPipe 文本语言检测器中...")
         # Record start time
@@ -32,11 +36,34 @@ def get_lang_detector():
 
         # 设置模型目录
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-        model_path = os.path.join(script_dir, "Resource", "Models", "mediapipe", "language_detector.tflite")
+        original_model_path = os.path.join(script_dir, "Resource", "Models", "mediapipe", "language_detector.tflite")
 
-        base_options = BaseOptions(model_asset_path=model_path)
-        options = text.LanguageDetectorOptions(base_options=base_options, max_results=1)
-        _LANG_DETECTOR_INSTANCE = text.LanguageDetector.create_from_options(options)
+        # 检查原始模型文件是否存在
+        if not os.path.exists(original_model_path):
+            rich.print(f"[[red]ERROR[/]] 模型文件不存在: {original_model_path}")
+            raise FileNotFoundError(f"模型文件不存在: {original_model_path}")
+
+        try:
+            # 尝试直接加载模型
+            base_options = BaseOptions(model_asset_path=original_model_path)
+            options = text.LanguageDetectorOptions(base_options=base_options, max_results=1)
+            _LANG_DETECTOR_INSTANCE = text.LanguageDetector.create_from_options(options)
+        except RuntimeError as e:
+            # 如果直接加载失败（可能是因为路径中有中文），则使用临时目录
+            rich.print(f"[[yellow]WARNING[/]] 直接加载模型失败，尝试使用临时目录: {str(e)}")
+
+            # 创建临时目录
+            _TEMP_MODEL_DIR = tempfile.TemporaryDirectory(prefix="ainiee_model_")
+            temp_model_path = os.path.join(_TEMP_MODEL_DIR.name, "language_detector.tflite")
+
+            # 复制模型文件到临时目录
+            rich.print(f"[[green]INFO[/]] 复制模型文件到临时目录: {temp_model_path}")
+            shutil.copy2(original_model_path, temp_model_path)
+
+            # 使用临时目录中的模型文件路径初始化 MediaPipe 语言检测器
+            base_options = BaseOptions(model_asset_path=temp_model_path)
+            options = text.LanguageDetectorOptions(base_options=base_options, max_results=1)
+            _LANG_DETECTOR_INSTANCE = text.LanguageDetector.create_from_options(options)
 
         # Calculate load time in milliseconds
         load_time_ms = (time.time() - start_time) * 1000
@@ -46,7 +73,7 @@ def get_lang_detector():
 # 释放语言检测器
 def close_lang_detector():
     """关闭并释放语言检测器的全局单例实例"""
-    global _LANG_DETECTOR_INSTANCE
+    global _LANG_DETECTOR_INSTANCE, _TEMP_MODEL_DIR
     if _LANG_DETECTOR_INSTANCE is not None:
         # MediaPipe任务通常有close方法用于释放资源
         try:
@@ -59,6 +86,17 @@ def close_lang_detector():
         finally:
             # 无论如何都将实例设置为None，允许垃圾回收
             _LANG_DETECTOR_INSTANCE = None
+
+    # 清理临时目录
+    if _TEMP_MODEL_DIR is not None:
+        try:
+            _TEMP_MODEL_DIR.cleanup()
+            rich.print("[[green]INFO[/]] 临时模型目录已清理!")
+        except Exception as e:
+            rich.print(f"[[red]WARNING[/]] 清理临时模型目录失败: {str(e)}")
+        finally:
+            _TEMP_MODEL_DIR = None
+
     return True
 
 # 检测文件编码

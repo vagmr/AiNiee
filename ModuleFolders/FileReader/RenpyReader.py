@@ -179,7 +179,7 @@ class RenpyReader(BaseSourceReader):
                             if char_var_match:
                                 speaker_var = char_var_match.group(1)
                                 # 调试输出
-                                print(f"[DEBUG][RenpyReader] 从代码行提取到角色变量: {speaker_var}, 代码行: {code_stripped}")
+                                # print(f"[DEBUG][RenpyReader] 从代码行提取到角色变量: {speaker_var}, 代码行: {code_stripped}")
 
                         if format_type:
                             entry_data = {

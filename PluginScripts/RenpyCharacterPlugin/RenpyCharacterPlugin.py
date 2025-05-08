@@ -19,7 +19,7 @@ class RenpyCharacterPlugin(PluginBase):
         self.name = "RenpyCharacterPlugin"
         self.description = "Ren'Py角色辅助翻译插件，提升对话翻译的准确性和人物特征还原度" \
             + "\n" + "自动识别Ren'Py游戏中的角色定义，并在翻译过程中的相关对话中嵌入说话者" \
-            + "\n" + "兼容性：仅支持Ren'Py项目；支持全部语言和模型"
+            + "\n" + "兼容性：仅支持Ren'Py项目,仅推荐强力模型使用"
 
         self.visibility = True  # 在插件设置中显示
         self.default_enable = False  # 默认禁用状态
@@ -280,6 +280,7 @@ class RenpyCharacterPlugin(PluginBase):
     def _enhance_system_prompt(self, config: TranslatorConfig):
         """增强系统提示，添加角色信息"""
         if not self.character_map:
+            print(f"[INFO][{self.name}] 没有找到角色定义，不需要增强系统提示")
             return  # 没有角色定义，不需要增强系统提示
 
         # 构建角色信息提示
