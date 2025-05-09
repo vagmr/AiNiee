@@ -42,6 +42,16 @@ class RenpyCharacterPlugin(PluginBase):
         # 角色信息标记格式
         self.character_tag_pattern = r'\[角色:(.*?)\((.*?)\)\]'  # 匹配 [角色:Name(var)]
 
+        #  重置状态变量
+        # self.reset_state()
+
+    def reset_state(self):
+        """重置插件状态"""
+        # 重置统计信息
+        self.modified_count = 0
+        self.processed_count = 0
+        self.error_entries = []
+
     def load(self):
         """插件加载时调用"""
         print(f"[INFO][{self.name}] 插件已加载")
@@ -51,8 +61,11 @@ class RenpyCharacterPlugin(PluginBase):
         if ProjectType.RENPY not in event_data.file_project_types:
             print(f"[INFO][{self.name}] 非renpy项目不执行")
             return
-        
+
+        # 在文本过滤事件开始时重置状态
         if event_name == "text_filter":
+            # 重置插件状态
+            self.reset_state()
             self._handle_text_filter(config, event_data)
         elif event_name == "preproces_text":
             self._handle_preprocess_text(config, event_data)
@@ -123,16 +136,20 @@ class RenpyCharacterPlugin(PluginBase):
                     speaker_var = item.get_extra("tag", None)
 
                 if speaker_var and speaker_var in self.character_map:
-                    # 修改源文本，添加角色信息
-                    char_name = self.character_map[speaker_var]
+                    # 检查源文本是否已经包含角色标签
                     original_text = item.source_text
-                    modified_text = f"[角色:{char_name}({speaker_var})] {original_text}"
+                    char_name = self.character_map[speaker_var]
+                    tag_pattern = f"\\[角色:{char_name}\\({speaker_var}\\)\\]"
 
-                    # 更新源文本
-                    item.source_text = modified_text
+                    if not re.search(tag_pattern, original_text):
+                        # 源文本不包含角色标签，添加角色信息
+                        modified_text = f"[角色:{char_name}({speaker_var})] {original_text}"
 
-                    # 记录修改信息
-                    self.modified_count += 1
+                        # 更新源文本
+                        item.source_text = modified_text
+
+                        # 记录修改信息
+                        self.modified_count += 1
 
                     # 添加_rcp_speaker_variable字段，以便后处理时使用
                     if not item.get_extra("_rcp_speaker_variable", None):
@@ -162,11 +179,14 @@ class RenpyCharacterPlugin(PluginBase):
                 if speaker_var and speaker_var in self.character_map:
                     # 检查翻译文本是否包含角色标记
                     translated_text = item.translated_text
-                    match = re.match(self.character_tag_pattern, translated_text)
 
-                    if match:
-                        # 提取角色标记后的文本
-                        clean_text = translated_text[match.end():].lstrip()
+                    # 移除所有角色标记
+                    # 使用findall找出所有角色标记
+                    matches = re.findall(self.character_tag_pattern, translated_text)
+
+                    if matches:
+                        # 移除所有角色标记
+                        clean_text = re.sub(self.character_tag_pattern, '', translated_text).lstrip()
 
                         # 更新翻译文本
                         item.translated_text = clean_text
@@ -307,10 +327,10 @@ class RenpyCharacterPlugin(PluginBase):
             # 对于非自定义提示词，我们需要修改内存中的提示词变量
             prompt_var_name = None
             prompt_builder_class = None
-            
+
             # 导入PromptBuilder类
             from ModuleFolders.PromptBuilder.PromptBuilder import PromptBuilder
-            
+
             if config.prompt_preset == PromptBuilderEnum.COMMON:
                 if config.target_language in ("chinese_simplified", "chinese_traditional"):
                     prompt_var_name = "common_system_zh"
@@ -328,10 +348,10 @@ class RenpyCharacterPlugin(PluginBase):
             elif config.prompt_preset == PromptBuilderEnum.THINK:
                 # 导入THINK模式的提示词构建器
                 from ModuleFolders.PromptBuilder.PromptBuilderThink import PromptBuilderThink
-                
+
                 # 确保提示词已经加载到内存
                 PromptBuilderThink.get_system_default(config)
-                
+
                 if config.target_language in ("chinese_simplified", "chinese_traditional"):
                     prompt_var_name = "think_system_zh"
                     prompt_builder_class = PromptBuilderThink
@@ -344,20 +364,20 @@ class RenpyCharacterPlugin(PluginBase):
                 # 保存原始提示词
                 if not hasattr(self, "_original_prompts"):
                     self._original_prompts = {}
-                
+
                 builder_key = f"{prompt_builder_class.__name__}.{prompt_var_name}"
                 if builder_key not in self._original_prompts:
                     self._original_prompts[builder_key] = getattr(prompt_builder_class, prompt_var_name)
-                
+
                 # 检查是否已经包含角色信息
                 original_prompt = getattr(prompt_builder_class, prompt_var_name)
                 if "### Ren'Py角色变量对照表" not in original_prompt:
                     # 添加角色信息
                     new_prompt = f"{original_prompt}\n\n{self.char_info_text}"
-                    
+
                     # 更新内存中的提示词
                     setattr(prompt_builder_class, prompt_var_name, new_prompt)
-                    
+
                     print(f"[INFO][{self.name}] 已更新内存中的系统提示词：{prompt_var_name} (在{prompt_builder_class.__name__}类中)")
             else:
                 print(f"[WARNING][{self.name}] 无法更新内存中的系统提示词，变量不存在：{prompt_var_name}")
