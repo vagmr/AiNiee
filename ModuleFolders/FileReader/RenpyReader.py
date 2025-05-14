@@ -142,7 +142,8 @@ class RenpyReader(BaseSourceReader):
 
                     # 调试输出
                     if renpy_character_plugin_active:
-                        print(f"[DEBUG][RenpyReader] 处理代码行: {code_stripped}")
+                        pass
+                        # print(f"[DEBUG][RenpyReader] 处理代码行: {code_stripped}")
 
                     if comment_source is not None and code_text is not None:
                         # 检查注释行上的标签（# 之后和 " 之前的部分）

@@ -39,11 +39,11 @@ class RenpyCharacterPlugin(PluginBase):
         self.processed_count = 0  # 处理的文本数量
         self.error_entries = []  # 恢复出错的条目
 
-        # 角色信息标记格式
-        self.character_tag_pattern = r'\[角色:(.*?)\((.*?)\)\]'  # 匹配 [角色:Name(var)]
+        # 角色信息标记格式 - 更通用的模式，能够处理各种情况
+        self.character_tag_pattern = r'\[角色:([^\]]+?)\]'  # 匹配任何 [角色:xxx] 格式
 
-        #  重置状态变量
-        # self.reset_state()
+        # 重置状态变量
+        self.reset_state()
 
     def reset_state(self):
         """重置插件状态"""
@@ -139,9 +139,20 @@ class RenpyCharacterPlugin(PluginBase):
                     # 检查源文本是否已经包含角色标签
                     original_text = item.source_text
                     char_name = self.character_map[speaker_var]
-                    tag_pattern = f"\\[角色:{char_name}\\({speaker_var}\\)\\]"
 
-                    if not re.search(tag_pattern, original_text):
+                    # 构建更灵活的标签模式，能够处理角色名中包含特殊字符的情况
+                    # 使用更通用的方式检测角色标签
+                    has_tag = False
+
+                    # 检查是否已经包含角色标签
+                    if '[角色:' in original_text:
+                        # 尝试提取第一个角色标签
+                        tag_match = re.match(r'\[角色:[^\]]+\]', original_text)
+                        if tag_match:
+                            # 如果已经有角色标签，则不添加新的
+                            has_tag = True
+
+                    if not has_tag:
                         # 源文本不包含角色标签，添加角色信息
                         modified_text = f"[角色:{char_name}({speaker_var})] {original_text}"
 
@@ -180,16 +191,23 @@ class RenpyCharacterPlugin(PluginBase):
                     # 检查翻译文本是否包含角色标记
                     translated_text = item.translated_text
 
-                    # 移除所有角色标记
-                    # 使用findall找出所有角色标记
-                    matches = re.findall(self.character_tag_pattern, translated_text)
+                    # 检查是否包含角色标记
+                    if '[角色:' in translated_text:
+                        # 使用更通用的方式移除所有角色标记
+                        # 先找出所有角色标记
+                        tags = re.findall(r'\[角色:[^\]]+\]', translated_text)
 
-                    if matches:
-                        # 移除所有角色标记
-                        clean_text = re.sub(self.character_tag_pattern, '', translated_text).lstrip()
+                        if tags:
+                            # 移除所有角色标记
+                            clean_text = translated_text
+                            for tag in tags:
+                                clean_text = clean_text.replace(tag, '')
 
-                        # 更新翻译文本
-                        item.translated_text = clean_text
+                            # 去除可能的前导空格
+                            clean_text = clean_text.lstrip()
+
+                            # 更新翻译文本
+                            item.translated_text = clean_text
                     else:
                         # 角色标记丢失，记录错误
                         error_count += 1
