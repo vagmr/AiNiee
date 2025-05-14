@@ -1,6 +1,6 @@
 import os
 from PyQt5.QtCore import QUrl, QTimer, QThread, pyqtSignal
-from PyQt5.QtGui import QDesktopServices, QIcon
+from PyQt5.QtGui import QDesktopServices,QIcon
 from PyQt5.QtWidgets import QApplication
 
 from qfluentwidgets import Theme

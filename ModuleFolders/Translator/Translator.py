@@ -1,3 +1,5 @@
+import json
+import os
 import time
 import threading
 import concurrent.futures
@@ -9,7 +11,7 @@ from tqdm import tqdm
 
 from Base.Base import Base
 from Base.PluginManager import PluginManager
-from ModuleFolders.Cache.CacheItem import CacheItem
+from ModuleFolders.Cache.CacheItem import CacheItem, TranslationStatus
 from ModuleFolders.Cache.CacheManager import CacheManager
 from ModuleFolders.Cache.CacheProject import CacheProjectStatistics
 from ModuleFolders.Translator import TranslatorUtil
@@ -104,13 +106,13 @@ class Translator(Base):
             self.config.label_input_path,
         )
 
-    # 翻译状态检查事件
+    # 继续翻译状态检查事件
     def translation_continue_check(self, event: int, data: dict) -> None:
         threading.Thread(
             target = self.translation_continue_check_target
         ).start()
 
-    # 翻译状态检查
+    # 继续翻译状态检查
     def translation_continue_check_target(self) -> None:
         # 等一下，等页面切换效果结束再执行，避免争抢 CPU 资源，导致 UI 卡顿
         time.sleep(0.5)
@@ -121,12 +123,38 @@ class Translator(Base):
         # 只有翻译状态为 无任务 时才执行检查逻辑，其他情况直接返回默认值
         if Base.work_status == Base.STATUS.IDLE:
             config = self.load_config()
-            self.cache_manager.load_from_file(config.get("label_output_path", ""))
-            continue_status = self.cache_manager.get_continue_status()
+            #self.cache_manager.load_from_file(config.get("label_output_path", ""))
+            #continue_status = self.cache_manager.get_continue_status()
+
+            # 过渡方案，通过状态数据小文件来判断
+            continue_status = self.check_project_statistics(config.get("label_output_path", ""))
 
         self.emit(Base.EVENT.TRANSLATION_CONTINUE_CHECK_DONE, {
             "continue_status" : continue_status,
         })
+
+    # 继续翻译状态判断方法
+    def check_project_statistics(self, folder_path: str) -> bool:
+
+        cache_folder_path = os.path.join(folder_path, "cache")
+
+        if not os.path.isdir(cache_folder_path):
+            return False
+
+        json_file_path = os.path.join(cache_folder_path, "ProjectStatistics.json")
+        if not os.path.isfile(json_file_path):
+            return False
+
+        # 获取小文件
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        total_line = data["total_line"] # 获取需翻译行数
+        line = data["line"] # 获取已翻译行数
+
+        if total_line == line:
+            return False
+        else:
+            return True
 
     # 翻译主流程
     def translation_start_target(self, continue_status: bool) -> None:
@@ -224,7 +252,7 @@ class Translator(Base):
                 return None
 
             # 获取 待翻译 状态的条目数量
-            item_count_status_untranslated = self.cache_manager.get_item_count_by_status(CacheItem.STATUS.UNTRANSLATED)
+            item_count_status_untranslated = self.cache_manager.get_item_count_by_status(TranslationStatus.UNTRANSLATED)
 
             # 判断是否需要继续翻译
             if item_count_status_untranslated == 0:
@@ -328,7 +356,7 @@ class Translator(Base):
                 self.print("")
 
             self.info(f"即将开始执行翻译任务，预计任务总数为 {len(tasks_list)}, 同时执行的任务数量为 {self.config.actual_thread_counts}，请注意保持网络通畅 ...")
-            time.sleep(5)
+            time.sleep(3)
             self.print("")
 
             # 开始执行翻译任务,构建异步线程池
@@ -372,7 +400,7 @@ class Translator(Base):
         converter = opencc.OpenCC(preset)
 
         for item in cache_list:
-            if item.translation_status == CacheItem.STATUS.TRANSLATED:
+            if item.translation_status == TranslationStatus.TRANSLATED:
                 item.translated_text = converter.convert(item.translated_text)
 
     # 单个翻译任务完成时,更新项目进度状态

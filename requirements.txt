@@ -12,6 +12,7 @@ PyQt5
 PyQt-Fluent-Widgets[full]
 opencc
 beautifulsoup4
+lxml
 chardet
 PyYAML
 requests
@@ -31,3 +32,4 @@ mediapipe==0.10.14
 # 获取iso语言代码对应的友好名称
 language-data
 langcodes
+msgspec
