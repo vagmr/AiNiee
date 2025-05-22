@@ -80,27 +80,6 @@ def update_splash_message(splash, message, app, font_size=10, font_weight=QFont.
     
     app.processEvents()
 
-def update_splash_message(splash, message, app, font_size=10, font_weight=QFont.Bold):
-    """
-    参数:
-        splash: QSplashScreen 实例
-        message: 要显示的消息
-        app: QApplication 实例，用于处理事件
-        font_size: 字体大小，默认为10
-        font_weight: 字体粗细，默认为粗体
-    """
-    # 设置字体
-    font = QFont("Microsoft YaHei")  # 使用微软雅黑字体
-    font.setPointSize(font_size)
-    font.setWeight(font_weight)
-    splash.setFont(font)
-
-    # 显示消息
-    splash.showMessage(message, Qt.AlignBottom | Qt.AlignCenter, Qt.black)
-
-    # 处理事件，确保启动画面能立即显示和更新
-    app.processEvents()
-
 
 if __name__ == "__main__":
     # 开启子进程支持

@@ -2,7 +2,7 @@ import os
 import re
 from typing import Dict
 
-from ModuleFolders.Cache.CacheItem import CacheItem
+from ModuleFolders.Cache.CacheItem import CacheItem, TranslationStatus
 from ModuleFolders.Cache.CacheProject import CacheProject, ProjectType
 from ModuleFolders.Translator.TranslatorConfig import TranslatorConfig
 from ModuleFolders.PromptBuilder.PromptBuilderEnum import PromptBuilderEnum
@@ -125,7 +125,7 @@ class RenpyCharacterPlugin(PluginBase):
         # 处理所有文本条目
         for file in event_data.files.values():
             for item in file.items:
-                if item.translation_status == CacheItem.STATUS.EXCLUDED:
+                if item.translation_status == TranslationStatus.EXCLUDED:
                     continue  # 跳过已排除的条目
 
                 # 获取角色变量信息
@@ -177,7 +177,7 @@ class RenpyCharacterPlugin(PluginBase):
         error_count = 0
         for file in event_data.files.values():
             for item in file.items:
-                if item.translation_status != CacheItem.STATUS.TRANSLATED:
+                if item.translation_status != TranslationStatus.TRANSLATED:
                     continue  # 只处理已翻译的条目
 
                 # 获取角色变量信息
