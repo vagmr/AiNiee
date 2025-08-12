@@ -2,11 +2,14 @@ from typing import List
 import re
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QLabel
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGridLayout
 
 import httpx
 
-from qfluentwidgets import MessageBoxBase, LineEdit, PushButton, StrongBodyLabel, FluentIcon
+from qfluentwidgets import (
+    MessageBoxBase, LineEdit, PushButton, StrongBodyLabel, FluentIcon,
+    PillPushButton, SingleDirectionScrollArea, isDarkTheme
+)
 
 from Base.Base import Base
 
@@ -48,12 +51,54 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         """)
 
         # 异步/同步拉取数据（这里用同步 httpx，数据量一般可接受）
+        # 容器背景使用主题色；按钮与主题色形成明暗对比，文本固定为 #f1356d
+        theme_hex = None
+        # 根据主题构造对比用的明暗色（覆盖在主题背景上）
+        if isDarkTheme():
+            theme_hex = "#2b2b2b"
+            btn_bg = "#dddddd"
+            btn_border = "rgba(255,255,255,0.28)"
+            btn_hover = "rgba(255,255,255,0.22)"
+            btn_checked = "rgba(255,255,255,0.30)"
+        else:
+            theme_hex = "#ffffff"
+            btn_bg = "rgba(0,0,0,0.06)"
+            btn_border = "rgba(0,0,0,0.18)"
+            btn_hover = "rgba(0,0,0,0.10)"
+            btn_checked = "rgba(0,0,0,0.16)"
+
+        
+
+        # 设置模型区域背景为主题色
+        # 放在 grid_parent 上，使视觉上“模型展示区域”整体统一
+        # 注意：为了有留白，外层布局已有边距
+        self.grid_parent.setStyleSheet(f"QWidget {{ background-color: {theme_hex}; border-radius: 8px; }}")
+
+        text_color = "#f1356d"  # 固定按钮文本色
+
+        # 胶囊按钮样式
+        self._capsule_style = (
+            "QPushButton {"
+            " border-radius: 18px; padding: 8px 14px;"
+            f" border: 1px solid {btn_border};"
+            f" background-color: {btn_bg};"
+            f" color: {text_color};"
+            "}"
+            "QPushButton:hover {"
+            f" background-color: {btn_hover};"
+            "}"
+            "QPushButton:checked {"
+            f" background-color: {btn_checked};"
+            f" border: 1px solid {btn_border};"
+            f" color: {text_color};"
+            "}"
+        )
+
         self._fetch_models()
 
     # 公开方法：获取选择的模型
     def get_selected_models(self) -> List[str]:
-        items = self.list_widget.selectedItems()
-        return [i.text() for i in items]
+        return list(self._selected)
 
     # UI
     def _build_ui(self) -> None:
@@ -85,12 +130,21 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         top_bar.addWidget(self.next_btn)
         self.viewLayout.addLayout(top_bar)
 
-        # 列表
-        self.list_widget = QListWidget(self)
-        self.list_widget.setSelectionMode(QListWidget.ExtendedSelection)
-        self.list_widget.itemSelectionChanged.connect(self._on_selection_change)
-        self.list_widget.itemDoubleClicked.connect(lambda _: self._accept_if_single_clicked())
-        self.viewLayout.addWidget(self.list_widget)
+        # 模型栅格（滚动区 + Grid）
+        self.scroll_area = SingleDirectionScrollArea(self, orient=Qt.Vertical)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        self.grid_parent = QWidget(self)
+        self.grid_layout = QGridLayout(self.grid_parent)
+        self.grid_layout.setContentsMargins(4, 8, 4, 8)
+        self.grid_layout.setHorizontalSpacing(16)
+        self.grid_layout.setVerticalSpacing(10)
+        self.scroll_area.setWidget(self.grid_parent)
+        self.viewLayout.addWidget(self.scroll_area)
+
+        # 选择集合（跨页保留）
+        self._selected = set()
 
     # 拉取模型
     def _fetch_models(self) -> None:
@@ -151,14 +205,22 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         self._apply_filter_and_refresh()
 
     def _on_selection_change(self) -> None:
-        self.yesButton.setEnabled(len(self.list_widget.selectedItems()) > 0)
+        # grid 方案改为使用内部集合控制按钮状态
+        self.yesButton.setEnabled(len(self._selected) > 0)
 
     def _accept_if_single_clicked(self) -> None:
-        # 双击时，若只选中一个则直接确认
-        if len(self.list_widget.selectedItems()) == 1:
+        # grid 方案：如果只有一个选择，仍然允许回车确认
+        if len(self._selected) == 1:
             self.accept()
 
     # 数据刷新
+    def _toggle_selection(self, name: str, checked: bool) -> None:
+        if checked:
+            self._selected.add(name)
+        else:
+            self._selected.discard(name)
+        self._on_selection_change()
+
     def _apply_filter_and_refresh(self) -> None:
         q = self.search_box.text().strip().lower()
         if q:
@@ -184,8 +246,28 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         self.prev_btn.setEnabled(self._current_page > 1)
         self.next_btn.setEnabled(self._current_page < total_pages)
 
-        self.list_widget.clear()
+        # 清空旧的按钮
+        while self.grid_layout.count():
+            item = self.grid_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        # 两列胶囊按钮布局
+        cols = 2
+        row = 0
+        col = 0
         for m in self._filtered[start:end]:
-            item = QListWidgetItem(m)
-            self.list_widget.addItem(item)
+            btn = PillPushButton(m, self.grid_parent)
+            btn.setCheckable(True)
+            btn.setChecked(m in self._selected)
+            btn.setStyleSheet(self._capsule_style)
+            btn.setMinimumWidth(240)
+            btn.setMinimumHeight(36)
+            btn.toggled.connect(lambda checked, name=m: self._toggle_selection(name, checked))
+            self.grid_layout.addWidget(btn, row, col)
+            col += 1
+            if col >= cols:
+                col = 0
+                row += 1
 
