@@ -1,7 +1,7 @@
 from typing import List
 import re
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGridLayout
 
 import httpx
@@ -12,6 +12,46 @@ from qfluentwidgets import (
 )
 
 from Base.Base import Base
+
+class _ModelFetchWorker(QObject):
+    finished = pyqtSignal(list)
+    failed = pyqtSignal(str)
+
+    def __init__(self, url: str, headers: dict):
+        super().__init__()
+        self.url = url
+        self.headers = headers
+
+    def run(self):
+        try:
+            with httpx.Client(http2=True, timeout=30) as client:
+                resp = client.get(self.url, headers=self.headers)
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as e:
+            self.failed.emit(str(e))
+            return
+
+        models = []
+        try:
+            if isinstance(data, dict) and isinstance(data.get("data"), list):
+                for item in data.get("data", []):
+                    mid = item.get("id") or item.get("model")
+                    if mid:
+                        models.append(str(mid))
+            elif isinstance(data, list):
+                for item in data:
+                    if isinstance(item, str):
+                        models.append(item)
+                    elif isinstance(item, dict):
+                        mid = item.get("id") or item.get("model")
+                        if mid:
+                            models.append(str(mid))
+        except Exception:
+            pass
+
+        self.finished.emit(models)
+
 
 
 class ModelBrowserDialog(MessageBoxBase, Base):
@@ -67,7 +107,7 @@ class ModelBrowserDialog(MessageBoxBase, Base):
             btn_hover = "rgba(0,0,0,0.10)"
             btn_checked = "rgba(0,0,0,0.16)"
 
-        
+
 
         # 设置模型区域背景为主题色
         # 放在 grid_parent 上，使视觉上“模型展示区域”整体统一
@@ -146,7 +186,7 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         # 选择集合（跨页保留）
         self._selected = set()
 
-    # 拉取模型
+    # 拉取模型（异步）
     def _fetch_models(self) -> None:
         base_url = self.platform_config.get("api_url", "").rstrip("/")
         auto_complete = self.platform_config.get("auto_complete", False)
@@ -159,43 +199,30 @@ class ModelBrowserDialog(MessageBoxBase, Base):
 
         url = f"{base_url}/models"
 
-        # 处理鉴权与代理
+        # 处理鉴权
         headers = {}
         api_keys = self.platform_config.get("api_key", "").replace(" ", "")
         if api_keys:
             headers["Authorization"] = f"Bearer {api_keys.split(',')[0]}"
 
+        # 启动后台线程
+        self._thread = QThread(self)
+        self._worker = _ModelFetchWorker(url, headers)
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.finished.connect(self._on_fetch_finished)
+        self._worker.failed.connect(self._on_fetch_failed)
+        # 线程结束后清理
+        self._worker.finished.connect(self._thread.quit)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.start()
 
-        try:
-            with httpx.Client(http2=True, timeout=30) as client:
-                resp = client.get(url, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-        except Exception as e:
-            self.error_toast("", self.tra("获取模型失败"))
-            self.debug(f"fetch models error: {e}")
-            data = {}
+    def _on_fetch_failed(self, err: str):
+        self.error_toast("", self.tra("获取模型失败"))
+        self.debug(f"fetch models error: {err}")
 
-        models = []
-        # 兼容常见返回结构
-        try:
-            if isinstance(data, dict) and isinstance(data.get("data"), list):
-                for item in data.get("data", []):
-                    mid = item.get("id") or item.get("model")
-                    if mid:
-                        models.append(str(mid))
-            elif isinstance(data, list):
-                for item in data:
-                    if isinstance(item, str):
-                        models.append(item)
-                    elif isinstance(item, dict):
-                        mid = item.get("id") or item.get("model")
-                        if mid:
-                            models.append(str(mid))
-        except Exception:
-            pass
-
-        # 去重并排序
+    def _on_fetch_finished(self, models: list):
         unique = sorted(list(dict.fromkeys(models)))
         self._all_models = unique
         self._apply_filter_and_refresh()
