@@ -148,7 +148,7 @@ class APIEditPage(MessageBoxBase, Base):
 
      # 接口密钥
     def add_widget_access_key(self, parent, config):
-        
+
         def text_changed(widget):
             config = self.load_config()
             config["platforms"][self.key]["access_key"] = widget.toPlainText().strip()
@@ -285,5 +285,47 @@ class APIEditPage(MessageBoxBase, Base):
             init = init,
             current_text_changed = current_text_changed,
         )
+        self.model_card = card
         card.items_changed.connect(lambda items: items_changed(card, items)) # 连接信号
+        # 新增：从接口获取模型
+        card.fetch_models_requested.connect(lambda: self._open_model_fetch_dialog())
         parent.addWidget(card)
+
+    # 打开获取模型页面
+    def _open_model_fetch_dialog(self):
+        from UserInterface.Platform.ModelBrowserDialog import ModelBrowserDialog
+        # 读取当前平台配置，传入对话框用于请求
+        config = self.load_config()
+        platform = config.get("platforms").get(self.key)
+        dialog = ModelBrowserDialog(self.window(), self.key, platform)
+        # 选择后回传
+        if dialog.exec_():
+            selected_models = dialog.get_selected_models()
+            if not selected_models:
+                return
+            # 将选择的模型加入到 model_datas 中（去重，并优先放前面）
+            config = self.load_config()
+            platforms = config.get("platforms")
+            model_datas = platforms[self.key].get("model_datas", [])
+            for m in selected_models:
+                if m not in model_datas:
+                    model_datas.append(m)
+            platforms[self.key]["model_datas"] = model_datas
+            # 如果只选择了一个，则设置为当前模型
+            if len(selected_models) == 1:
+                platforms[self.key]["model"] = selected_models[0]
+            # 保存配置
+            self.save_config(config)
+
+            # 刷新右侧下拉框的选项与当前选中项
+            try:
+                items = platforms[self.key].get("model_datas", [])
+                self.model_card.set_items(items)
+                current_model = platforms[self.key].get("model", "")
+                if current_model:
+                    self.model_card.set_current_index(max(0, self.model_card.find_text(current_model)))
+            except Exception:
+                pass
+
+            # 简单提示
+            self.success_toast("", self.tra("已添加所选模型"))
