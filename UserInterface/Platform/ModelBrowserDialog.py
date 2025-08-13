@@ -134,6 +134,7 @@ class ModelBrowserDialog(MessageBoxBase, Base):
             "}"
         )
 
+        self._begin_loading_state()
         self._fetch_models()
 
     # 公开方法：获取选择的模型
@@ -219,13 +220,20 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         self._thread.start()
 
     def _on_fetch_failed(self, err: str):
-        self.error_toast("", self.tra("获取模型失败"))
+        self._end_loading_state()
+        self._show_placeholder(self.tra("获取失败"))
+        self.error_toast(self.tra("获取模型"), self.tra("获取模型失败"))
         self.debug(f"fetch models error: {err}")
 
     def _on_fetch_finished(self, models: list):
         unique = sorted(list(dict.fromkeys(models)))
         self._all_models = unique
         self._apply_filter_and_refresh()
+        self._end_loading_state()
+        if unique:
+            self.success_toast(self.tra("获取模型"), self.tra("获取成功"))
+        else:
+            self.warning_toast(self.tra("获取模型"), self.tra("没有返回任何模型"))
 
     # 事件
     def _on_search_changed(self, text: str) -> None:
@@ -234,6 +242,35 @@ class ModelBrowserDialog(MessageBoxBase, Base):
     def _on_selection_change(self) -> None:
         # grid 方案改为使用内部集合控制按钮状态
         self.yesButton.setEnabled(len(self._selected) > 0)
+    # 占位/加载提示
+    def _clear_grid(self):
+        while self.grid_layout.count():
+            item = self.grid_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+    def _show_placeholder(self, text: str):
+        self._clear_grid()
+        if not hasattr(self, "_placeholder_label"):
+            self._placeholder_label = QLabel(self)
+            self._placeholder_label.setAlignment(Qt.AlignCenter)
+            self._placeholder_label.setStyleSheet("QLabel { color: palette(window-text); font-size: 14px; }")
+        self._placeholder_label.setText(text)
+        # 跨两列水平居中
+        self.grid_layout.addWidget(self._placeholder_label, 0, 0, 1, 2, alignment=Qt.AlignCenter)
+
+    def _begin_loading_state(self):
+        self.search_box.setEnabled(False)
+        self.prev_btn.setEnabled(False)
+        self.next_btn.setEnabled(False)
+        self.page_label.setText("...")
+        self._show_placeholder(self.tra("正在获取模型..."))
+
+    def _end_loading_state(self):
+        self.search_box.setEnabled(True)
+        # 翻页按钮的可用状态由 _refresh_list 里计算
+
 
     def _accept_if_single_clicked(self) -> None:
         # grid 方案：如果只有一个选择，仍然允许回车确认

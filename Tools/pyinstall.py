@@ -7,7 +7,7 @@ cmd = [
     "--clean",  # Clean PyInstaller cache and remove temporary files before building.
     "--onedir",  # Create a one-file bundled executable.
     "--noconfirm",  # Replace output directory (default: SPECPATH/dist/SPECNAME) without asking for confirmation
-    # "--distpath=./dist/AiNiee" #指定输出目录
+    "--distpath=./dist/AiNiee" #指定输出目录
 ]
 
 # 需要排除的软件包
