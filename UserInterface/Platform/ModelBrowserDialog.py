@@ -1,7 +1,7 @@
 from typing import List
 import re
 
-from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGridLayout
 
 import httpx
@@ -21,15 +21,25 @@ class _ModelFetchWorker(QObject):
         super().__init__()
         self.url = url
         self.headers = headers
+        self._aborted = False
+
+    def cancel(self):
+        self._aborted = True
 
     def run(self):
+        if self._aborted:
+            return
         try:
             with httpx.Client(http2=True, timeout=10.0) as client:
                 resp = client.get(self.url, headers=self.headers, timeout=10.0)
                 resp.raise_for_status()
                 data = resp.json()
         except Exception as e:
-            self.failed.emit(str(e))
+            if not self._aborted:
+                self.failed.emit(str(e))
+            return
+
+        if self._aborted:
             return
 
         models = []
@@ -50,7 +60,8 @@ class _ModelFetchWorker(QObject):
         except Exception:
             pass
 
-        self.finished.emit(models)
+        if not self._aborted:
+            self.finished.emit(models)
 
 
 
@@ -61,6 +72,8 @@ class ModelBrowserDialog(MessageBoxBase, Base):
     - 本地分页与搜索（适配几百条模型的展示）
     - 单/多选：按住 Ctrl/Shift 可多选；双击单条将立即确认
     """
+    # 确认时把最终选择通过信号抛出，避免外部读取竞态
+    selectedConfirmed = pyqtSignal(list)
 
     def __init__(self, window, platform_key: str, platform_config: dict):
         super().__init__(parent=window)
@@ -68,6 +81,10 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         self.platform_config = platform_config
 
         # UI 基本设置
+
+        # 关闭/销毁保护标志
+        self._closing = False
+
         self.widget.setMinimumSize(720, 520)
         self.yesButton.setText(self.tra("确定"))
         self.cancelButton.setText(self.tra("取消"))
@@ -137,8 +154,18 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         self._begin_loading_state()
         self._fetch_models()
 
+        # 连接确认按钮，点击时调用 accept（保证加的信号和快照逻辑生效）
+        try:
+            self.yesButton.clicked.disconnect()
+        except Exception:
+            pass
+        self.yesButton.clicked.connect(self.accept)
+
     # 公开方法：获取选择的模型
     def get_selected_models(self) -> List[str]:
+        # 若已在 accept() 阶段确认，则返回确认时的快照，避免并发导致的空值
+        if hasattr(self, "_confirmed_models"):
+            return list(self._confirmed_models)
         return list(self._selected)
 
     # UI
@@ -219,21 +246,79 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         self._thread.finished.connect(self._thread.deleteLater)
         self._thread.start()
 
+    # 覆写关闭/拒绝，确保停止后台线程并安全清理
+    def reject(self) -> None:
+        # 先隐藏，减少重绘竞争
+        try:
+            self.hide()
+        except Exception:
+            self.debug("hide failed")
+        # 如果线程还在跑，发起取消并等待其结束
+        try:
+            if hasattr(self, "_worker") and self._worker:
+                self._worker.cancel()
+            if hasattr(self, "_thread") and self._thread and self._thread.isRunning():
+                self._thread.quit()
+                self._thread.wait(2000)
+        except Exception:
+            pass
+        super().reject()
+
+    def accept(self) -> None:
+        # 确认前先打上关闭标志并停止后台线程，避免竞态重绘
+        self._closing = True
+        # 在任何隐藏/清理动作前，先拍一份快照并发信号，保证上层拿得到
+        try:
+            self._confirmed_models = list(self._selected)
+            self.selectedConfirmed.emit(self._confirmed_models)
+        except Exception:
+            pass
+        try:
+            self.hide()
+        except Exception:
+            self.debug("hide failed")
+        try:
+            if hasattr(self, "_worker") and self._worker:
+                self._worker.cancel()
+            if hasattr(self, "_thread") and self._thread and self._thread.isRunning():
+                self._thread.quit()
+                self._thread.wait(2000)
+        except Exception:
+            pass
+        # 延迟调用父类 accept，确保本轮绘制结束（用 lambda + 显式 super 调用）
+        QTimer.singleShot(0, lambda: super(ModelBrowserDialog, self).accept())
+        return
+
+    def closeEvent(self, event):
+        try:
+            if hasattr(self, "_worker") and self._worker:
+                self._worker.cancel()
+            if hasattr(self, "_thread") and self._thread and self._thread.isRunning():
+                self._thread.quit()
+                self._thread.wait(2000)
+        except Exception:
+            pass
+        return super().closeEvent(event)
+
+
+
     def _on_fetch_failed(self, err: str):
-        self._end_loading_state()
-        self._show_placeholder(self.tra("获取失败"))
-        self.error_toast(self.tra("获取模型"), self.tra("获取模型失败"))
+        # 异步延迟清理 + 提示，避免与关闭/销毁竞争
+        QTimer.singleShot(0, self._end_loading_state)
+        QTimer.singleShot(0, lambda: self._show_placeholder(self.tra("获取失败")))
+        QTimer.singleShot(0, lambda: self.error_toast(self.tra("获取模型"), self.tra("获取模型失败")))
         self.debug(f"fetch models error: {err}")
 
     def _on_fetch_finished(self, models: list):
         unique = sorted(list(dict.fromkeys(models)))
         self._all_models = unique
-        self._apply_filter_and_refresh()
-        self._end_loading_state()
+        # 异步延迟刷新，避免与关闭/销毁竞争
+        QTimer.singleShot(0, self._apply_filter_and_refresh)
+        QTimer.singleShot(0, self._end_loading_state)
         if unique:
-            self.success_toast(self.tra("获取模型"), self.tra("获取成功"))
+            QTimer.singleShot(0, lambda: self.success_toast(self.tra("获取模型"), self.tra("获取成功")))
         else:
-            self.warning_toast(self.tra("获取模型"), self.tra("没有返回任何模型"))
+            QTimer.singleShot(0, lambda: self.warning_toast(self.tra("获取模型"), self.tra("没有返回任何模型")))
 
     # 事件
     def _on_search_changed(self, text: str) -> None:

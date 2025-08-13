@@ -294,14 +294,17 @@ class APIEditPage(MessageBoxBase, Base):
     # 打开获取模型页面
     def _open_model_fetch_dialog(self):
         from UserInterface.Platform.ModelBrowserDialog import ModelBrowserDialog
+        # self.debug(f"open_model_fetch_dialog: opening for platform={self.key}")
+
         # 读取当前平台配置，传入对话框用于请求
         config = self.load_config()
         platform = config.get("platforms").get(self.key)
         dialog = ModelBrowserDialog(self.window(), self.key, platform)
-        # 选择后回传
-        if dialog.exec_():
-            selected_models = dialog.get_selected_models()
+
+        def _on_models_confirmed(selected_models: list[str]):
+            # self.debug(f"model_fetch_confirmed: {selected_models}")
             if not selected_models:
+                self.warning_toast("", self.tra("未选择任何模型"))
                 return
             # 将选择的模型加入到 model_datas 中（去重，并优先放前面）
             config = self.load_config()
@@ -316,6 +319,8 @@ class APIEditPage(MessageBoxBase, Base):
                 platforms[self.key]["model"] = selected_models[0]
             # 保存配置
             self.save_config(config)
+            # self.debug(f"model_datas after save: {platforms[self.key].get('model_datas')}")
+            self.debug(f"current model after save: {platforms[self.key].get('model')}")
 
             # 刷新右侧下拉框的选项与当前选中项
             try:
@@ -324,8 +329,18 @@ class APIEditPage(MessageBoxBase, Base):
                 current_model = platforms[self.key].get("model", "")
                 if current_model:
                     self.model_card.set_current_index(max(0, self.model_card.find_text(current_model)))
-            except Exception:
-                pass
+            except Exception as e:
+                self.debug(f"refresh combobox failed: {e}")
 
             # 简单提示
             self.success_toast("", self.tra("已添加所选模型"))
+
+        # 同时支持信号回调和 exec_ 返回，避免任何时序丢失
+        try:
+            dialog.selectedConfirmed.connect(_on_models_confirmed)
+        except Exception:
+            pass
+
+        if dialog.exec_():
+            # 再次兜底读取
+            _on_models_confirmed(dialog.get_selected_models())
