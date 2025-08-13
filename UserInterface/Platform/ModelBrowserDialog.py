@@ -8,7 +8,7 @@ import httpx
 
 from qfluentwidgets import (
     MessageBoxBase, LineEdit, PushButton, StrongBodyLabel, FluentIcon,
-    PillPushButton, SingleDirectionScrollArea, isDarkTheme, ProgressRing
+    PillPushButton, SingleDirectionScrollArea, isDarkTheme, IndeterminateProgressRing,
 )
 
 from Base.Base import Base
@@ -271,12 +271,11 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         lay = QVBoxLayout(self._loading_container)
         lay.setContentsMargins(0, 24, 0, 24)
         lay.setSpacing(8)
-        ring = ProgressRing(self._loading_container)
-        ring.setRange(0, 0)  # 不确定进度，动画模式
+        ring = IndeterminateProgressRing(self._loading_container)
         ring.setFixedSize(40, 40)
-        txt = QLabel(self.tra("正在获取模型..."), self._loading_container)
+        txt = StrongBodyLabel(self.tra("正在获取模型..."), self._loading_container)
         txt.setAlignment(Qt.AlignCenter)
-        txt.setStyleSheet("QLabel { color: palette(window-text); }")
+        # txt.setStyleSheet("QLabel { color: palette(window-text); }")
         lay.addWidget(ring, 0, Qt.AlignCenter)
         lay.addWidget(txt, 0, Qt.AlignCenter)
         self.grid_layout.addWidget(self._loading_container, 0, 0, 1, 2, alignment=Qt.AlignCenter)
