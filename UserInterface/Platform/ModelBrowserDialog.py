@@ -8,7 +8,7 @@ import httpx
 
 from qfluentwidgets import (
     MessageBoxBase, LineEdit, PushButton, StrongBodyLabel, FluentIcon,
-    PillPushButton, SingleDirectionScrollArea, isDarkTheme
+    PillPushButton, SingleDirectionScrollArea, isDarkTheme, ProgressRing
 )
 
 from Base.Base import Base
@@ -24,8 +24,8 @@ class _ModelFetchWorker(QObject):
 
     def run(self):
         try:
-            with httpx.Client(http2=True, timeout=30) as client:
-                resp = client.get(self.url, headers=self.headers)
+            with httpx.Client(http2=True, timeout=10.0) as client:
+                resp = client.get(self.url, headers=self.headers, timeout=10.0)
                 resp.raise_for_status()
                 data = resp.json()
         except Exception as e:
@@ -178,9 +178,9 @@ class ModelBrowserDialog(MessageBoxBase, Base):
 
         self.grid_parent = QWidget(self)
         self.grid_layout = QGridLayout(self.grid_parent)
-        self.grid_layout.setContentsMargins(4, 8, 4, 8)
+        self.grid_layout.setContentsMargins(8, 8, 18, 8)  # 右侧适当留白，避免贴太近滚动条
         self.grid_layout.setHorizontalSpacing(16)
-        self.grid_layout.setVerticalSpacing(10)
+        self.grid_layout.setVerticalSpacing(12)
         self.scroll_area.setWidget(self.grid_parent)
         self.viewLayout.addWidget(self.scroll_area)
 
@@ -265,10 +265,27 @@ class ModelBrowserDialog(MessageBoxBase, Base):
         self.prev_btn.setEnabled(False)
         self.next_btn.setEnabled(False)
         self.page_label.setText("...")
-        self._show_placeholder(self.tra("正在获取模型..."))
+        # 居中显示圆形进度环 + 文本
+        self._clear_grid()
+        self._loading_container = QWidget(self)
+        lay = QVBoxLayout(self._loading_container)
+        lay.setContentsMargins(0, 24, 0, 24)
+        lay.setSpacing(8)
+        ring = ProgressRing(self._loading_container)
+        ring.setRange(0, 0)  # 不确定进度，动画模式
+        ring.setFixedSize(40, 40)
+        txt = QLabel(self.tra("正在获取模型..."), self._loading_container)
+        txt.setAlignment(Qt.AlignCenter)
+        txt.setStyleSheet("QLabel { color: palette(window-text); }")
+        lay.addWidget(ring, 0, Qt.AlignCenter)
+        lay.addWidget(txt, 0, Qt.AlignCenter)
+        self.grid_layout.addWidget(self._loading_container, 0, 0, 1, 2, alignment=Qt.AlignCenter)
 
     def _end_loading_state(self):
         self.search_box.setEnabled(True)
+        if hasattr(self, "_loading_container") and self._loading_container:
+            self._loading_container.deleteLater()
+            self._loading_container = None
         # 翻页按钮的可用状态由 _refresh_list 里计算
 
 
